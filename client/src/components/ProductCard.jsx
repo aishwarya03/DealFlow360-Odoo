@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { ArrowUpRight, Minus, Package, Plus, ShoppingCart } from 'lucide-react';
 
 import Button from './Button';
@@ -28,13 +29,19 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/60">
-      <div className="relative flex aspect-[1.25/1] shrink-0 items-center justify-center overflow-hidden bg-slate-100 p-5">
+      <Link
+        to={`/products/${product.id}`}
+        className="relative flex aspect-[1.25/1] shrink-0 items-center justify-center overflow-hidden bg-slate-100 p-5"
+      >
         <span className="absolute top-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase shadow-sm">
           {product.productType === 'SERVICE' ? 'Service' : 'In stock'}
         </span>
         <button
           type="button"
-          onClick={() => onRequestQuote(product, inCart ? cartQuantity : 1)}
+          onClick={(e) => {
+            e.preventDefault();
+            onRequestQuote(product, inCart ? cartQuantity : 1);
+          }}
           className="absolute top-3 right-3 flex size-8 translate-y-1 items-center justify-center rounded-full bg-white text-slate-500 opacity-0 shadow-sm transition group-hover:translate-y-0 group-hover:opacity-100 hover:text-brand-600"
           aria-label={`Request a quote for ${product.name}`}
         >
@@ -49,14 +56,16 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
         ) : (
           <Icon className="size-14 text-slate-300 transition duration-500 group-hover:scale-110 group-hover:text-brand-300" aria-hidden="true" />
         )}
-      </div>
+      </Link>
 
       <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-bold tracking-[0.14em] text-brand-600 uppercase">
           {CATEGORY_LABELS[product.category] ?? categoryName}
         </p>
         <h3 className="mt-2 min-h-10 text-[17px] font-semibold leading-6 text-slate-900">
-          {product.name}
+          <Link to={`/products/${product.id}`} className="hover:text-brand-600">
+            {product.name}
+          </Link>
         </h3>
         <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-slate-500">
           {product.description || 'Configured for your team and ready to quote.'}

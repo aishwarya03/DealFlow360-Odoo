@@ -10,6 +10,11 @@ export const listPublicProducts = async (params = {}) => {
   return res.data.data;
 };
 
+export const getPublicProduct = async (id) => {
+  const res = await apiClient.get(`/api/public/products/${id}`);
+  return res.data.data.product;
+};
+
 export const createProduct = async (data) => {
   const res = await apiClient.post('/api/internal/products', data);
   return res.data.data.product;

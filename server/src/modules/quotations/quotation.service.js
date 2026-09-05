@@ -180,7 +180,10 @@ export const getQuotationById = async (id, actingUser) => {
 // Resolves one line's stored, snapshotted shape from a {productId, quantity,
 // discountPercent, isRecurring, recurringCycle} input. Shared by create and
 // updateLines so a line looks the same regardless of when it was added.
-const buildLineData = async (tierId, input) => {
+// Exported so the customer portal builds lines through exactly this path —
+// same price snapshot, same ceiling resolution, same validation. A second
+// implementation would be a second set of rules to keep in sync.
+export const buildLineData = async (tierId, input) => {
   const product = await prisma.product.findUnique({ where: { id: input.productId } });
   if (!product || !product.isActive) {
     throw ApiError.badRequest(`No active product with id ${input.productId}`);

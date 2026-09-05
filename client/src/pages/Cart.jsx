@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { ArrowRight, Minus, Package, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
@@ -49,7 +49,10 @@ const Cart = () => {
           <>
             <div className="mt-8 divide-y divide-slate-100 rounded-lg border border-slate-200">
               {items.map((item) => {
-                const Icon = CATEGORY_ICONS[item.category];
+                // Same fallback as ProductCard: item.category is now a real
+                // category name from the live catalog API, which won't match
+                // this static presentation map for most categories.
+                const Icon = CATEGORY_ICONS[item.category] || Package;
                 return (
                   <div key={item.id} className="flex items-center gap-4 p-4">
                     <div className="flex size-14 shrink-0 items-center justify-center rounded-md bg-slate-100">

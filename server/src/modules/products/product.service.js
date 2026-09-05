@@ -145,6 +145,36 @@ export const listPublicProducts = async (filters = {}) => {
   };
 };
 
+// Same allowlisted shape as listPublicProducts: no cost price, no margin.
+export const getPublicProductById = async (id) => {
+  const product = await prisma.product.findUnique({
+    where: { id, isActive: true },
+    include: withCategory,
+  });
+
+  if (!product) throw ApiError.notFound(`No product with id ${id}`);
+
+  const full = toPublicProduct(product);
+
+  return {
+    id: full.id,
+    sku: full.sku,
+    name: full.name,
+    description: full.description,
+    productType: full.productType,
+    category: full.category,
+    unit: full.unit,
+    imageUrl: full.imageUrl,
+    isSubscribable: full.isSubscribable,
+    listPrice: full.listPrice,
+    taxRate: full.taxRate,
+    createdAt: full.createdAt,
+    updatedAt: full.updatedAt,
+    price: full.listPrice,
+    cycle: full.isSubscribable ? 'month' : null,
+  };
+};
+
 export const getProductById = async (id) => {
   const product = await prisma.product.findUnique({ where: { id }, include: withCategory });
 

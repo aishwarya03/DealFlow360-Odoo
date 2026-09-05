@@ -14,6 +14,9 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  // A portal call sets its own Authorization header (a different token
+  // audience) — never overwrite it with the staff token.
+  if (config.headers.Authorization) return config;
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

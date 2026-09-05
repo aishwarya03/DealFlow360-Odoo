@@ -14,6 +14,12 @@ export const publicList = async (req, res) => {
   sendSuccess(res, 'Products', result);
 };
 
+export const publicGetOne = async (req, res) => {
+  const product = await productService.getPublicProductById(req.params.id);
+
+  sendSuccess(res, 'Product', { product });
+};
+
 export const getOne = async (req, res) => {
   const product = await productService.getProductById(req.params.id);
 

@@ -1,9 +1,10 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { ShoppingCart } from 'lucide-react';
 
 import Button from './Button';
 import ClientLogo from './ClientLogo';
 import { useCart } from '../hooks/useCart';
+import { usePortalAuth } from '../hooks/usePortalAuth';
 import { cn } from '../lib/cn';
 
 const NAV_LINKS = [
@@ -15,6 +16,13 @@ const NAV_LINKS = [
  * RequestQuote. One place to keep nav/login links in sync. */
 const SiteHeader = () => {
   const { count } = useCart();
+  const { customer, logout } = usePortalAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/85 backdrop-blur">
@@ -55,16 +63,31 @@ const SiteHeader = () => {
               </span>
             )}
           </Link>
-          <Link to="/login">
-            <Button variant="ghost" size="sm">
-              Staff Login
-            </Button>
-          </Link>
-          <Link to="/portal/login">
-            <Button variant="secondary" size="sm">
-              Customer Login
-            </Button>
-          </Link>
+          {customer ? (
+            <>
+              <Link to="/portal/quotations">
+                <Button variant="ghost" size="sm">
+                  My Quotations
+                </Button>
+              </Link>
+              <Button variant="secondary" size="sm" onClick={handleLogout}>
+                Logout
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button variant="ghost" size="sm">
+                  Staff Login
+                </Button>
+              </Link>
+              <Link to="/portal/login">
+                <Button variant="secondary" size="sm">
+                  Customer Login
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

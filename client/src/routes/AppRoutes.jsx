@@ -11,11 +11,16 @@ import About from '../pages/About';
 import Cart from '../pages/Cart';
 import Landing from '../pages/Landing';
 import Products from '../pages/Products';
+import ProductDetail from '../pages/ProductDetail';
 import RequestQuote from '../pages/RequestQuote';
 import Home from '../pages/Home';
 import Login from '../pages/Login';
+import PortalLogin from '../pages/PortalLogin';
+import MyQuotations from '../pages/MyQuotations';
+import QuotationDetail from '../pages/QuotationDetail';
 import NotFound from '../pages/NotFound';
 import ProtectedRoute from '../components/ProtectedRoute';
+import PortalProtectedRoute from '../components/PortalProtectedRoute';
 
 /*
  * No global Layout: the landing page, the internal AppShell and the customer
@@ -35,7 +40,25 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/portal/login" element={<PortalLogin />} />
+        <Route
+          path="/portal/quotations"
+          element={
+            <PortalProtectedRoute>
+              <MyQuotations />
+            </PortalProtectedRoute>
+          }
+        />
+        <Route
+          path="/portal/quotations/:id"
+          element={
+            <PortalProtectedRoute>
+              <QuotationDetail />
+            </PortalProtectedRoute>
+          }
+        />
         <Route path="/products" element={<Products />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/about" element={<About />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/request-quote" element={<RequestQuote />} />

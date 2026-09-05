@@ -14,6 +14,7 @@ import discountRoutes from './modules/discounts/discount.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import productRoutes from './modules/products/product.routes.js';
 import publicProductRoutes from './modules/products/product.public.routes.js';
+import portalRoutes from './modules/portal/portal.routes.js';
 import quotationRoutes from './modules/quotations/quotation.routes.js';
 import tierRoutes from './modules/tiers/tier.routes.js';
 import warehouseRoutes from './modules/warehouses/warehouse.routes.js';
@@ -48,6 +49,7 @@ app.use('/api/internal/warehouses', warehouseRoutes);
 app.use('/api/internal/inventory', inventoryRoutes);
 app.use('/api/internal/quotations', quotationRoutes);
 app.use('/api/internal/approvals', approvalRoutes);
+app.use('/api/portal', portalRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

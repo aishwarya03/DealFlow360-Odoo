@@ -2,15 +2,18 @@ import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { PortalAuthProvider } from './context/PortalAuthContext';
 import AppRoutes from './routes/AppRoutes';
 
 function App() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <AppRoutes />
-        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-      </CartProvider>
+      <PortalAuthProvider>
+        <CartProvider>
+          <AppRoutes />
+          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+        </CartProvider>
+      </PortalAuthProvider>
     </AuthProvider>
   );
 }
