@@ -59,7 +59,7 @@ const CustomersPage = () => {
     {
       key: 'tier',
       header: 'Tier',
-      render: (row) => <span className={tierTone[row.tier]}>{row.tier}</span>,
+      render: (row) => <span className={tierTone[row.tier?.code]}>{row.tier?.name ?? '—'}</span>,
     },
     { key: 'contactName', header: 'Contact', render: (row) => row.contactName ?? '—' },
     {

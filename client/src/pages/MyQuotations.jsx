@@ -5,9 +5,12 @@ import toast from 'react-hot-toast';
 
 import { listMyQuotations } from '../api/portal';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
+
+const PAGE_SIZE = 12;
 
 const displayCode = (id) => `Q-${1000 + id}`;
 
@@ -36,6 +39,7 @@ const MyQuotations = () => {
 
   const [quotations, setQuotations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     listMyQuotations()
@@ -43,6 +47,9 @@ const MyQuotations = () => {
       .catch(() => toast.error('Could not load your quotations'))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const totalPages = Math.max(1, Math.ceil(quotations.length / PAGE_SIZE));
+  const pageQuotations = quotations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -78,7 +85,7 @@ const MyQuotations = () => {
           </div>
         ) : (
           <div className="mt-8 divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {quotations.map((quotation) => (
+            {pageQuotations.map((quotation) => (
               <div key={quotation.id} className="flex items-center gap-4 p-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -114,6 +121,10 @@ const MyQuotations = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {!isLoading && quotations.length > 0 && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="mt-4 rounded-lg border border-slate-200" />
         )}
       </main>
 

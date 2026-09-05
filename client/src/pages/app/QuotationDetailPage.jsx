@@ -298,7 +298,7 @@ const QuotationDetailPage = () => {
             )
           }
         >
-          <DataTable columns={lineColumns} rows={quotation.lines} />
+          <DataTable columns={lineColumns} rows={quotation.lines} pageSize={0} />
           {quotation.totals && (
             <div className="flex justify-end gap-6 border-t border-slate-100 px-4 py-3 text-sm">
               <span className="text-slate-500">

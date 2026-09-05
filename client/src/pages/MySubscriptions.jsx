@@ -5,10 +5,13 @@ import toast from 'react-hot-toast';
 
 import { listMySubscriptions } from '../api/portal';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import StatusBadge from '../components/StatusBadge';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
+
+const PAGE_SIZE = 12;
 
 const CYCLE_LABEL = { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', YEARLY: 'Yearly' };
 
@@ -20,6 +23,7 @@ const MySubscriptions = () => {
 
   const [subscriptions, setSubscriptions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     listMySubscriptions()
@@ -27,6 +31,9 @@ const MySubscriptions = () => {
       .catch(() => toast.error('Could not load your subscriptions'))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const totalPages = Math.max(1, Math.ceil(subscriptions.length / PAGE_SIZE));
+  const pageSubscriptions = subscriptions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -50,7 +57,7 @@ const MySubscriptions = () => {
           </div>
         ) : (
           <div className="mt-8 divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {subscriptions.map((sub) => {
+            {pageSubscriptions.map((sub) => {
               const pendingInvoice = sub.invoices?.find?.((inv) => inv.status === 'PENDING_APPROVAL');
               return (
                 <div key={sub.id} className="flex items-center gap-4 p-4">
@@ -83,6 +90,10 @@ const MySubscriptions = () => {
               );
             })}
           </div>
+        )}
+
+        {!isLoading && subscriptions.length > 0 && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} className="mt-4 rounded-lg border border-slate-200" />
         )}
       </main>
 
