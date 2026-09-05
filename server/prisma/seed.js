@@ -63,130 +63,153 @@ const CUSTOMERS = [
 // [tier code, category path, max discount %]
 // At or below max, no approval. Above it, a Sales Manager must approve.
 const DISCOUNT_RULES = [
-  ['PLATINUM', 'Hardware', 20],
-  ['PLATINUM', 'Service', 15],
-  ['PLATINUM', 'Software', 20],
+  ['PLATINUM', 'Video Surveillance', 20],
+  ['PLATINUM', 'Networking & Power', 20],
+  ['PLATINUM', 'Storage & Recording', 20],
+  ['PLATINUM', 'Installation & Services', 15],
 
-  ['GOLD', 'Hardware', 15],
-  ['GOLD', 'Service', 10],
-  ['GOLD', 'Software', 15],
+  ['GOLD', 'Video Surveillance', 15],
+  ['GOLD', 'Networking & Power', 15],
+  ['GOLD', 'Storage & Recording', 15],
+  ['GOLD', 'Installation & Services', 10],
 
-  ['SILVER', 'Hardware', 10],
-  ['SILVER', 'Service', 7],
-  ['SILVER', 'Software', 10],
+  ['SILVER', 'Video Surveillance', 10],
+  ['SILVER', 'Networking & Power', 10],
+  ['SILVER', 'Storage & Recording', 10],
+  ['SILVER', 'Installation & Services', 7],
 
-  ['BRONZE', 'Hardware', 5],
-  ['BRONZE', 'Service', 3],
-  ['BRONZE', 'Software', 5],
+  ['BRONZE', 'Video Surveillance', 5],
+  ['BRONZE', 'Networking & Power', 5],
+  ['BRONZE', 'Storage & Recording', 5],
+  ['BRONZE', 'Installation & Services', 3],
 ];
 
-// A real tree, not a flat enum — "Hardware" holds a child category
-// (Computers) that products attach to, while "Software" and "Service" hold
-// products directly at the root, demonstrating both valid patterns.
+// Surveillance catalogue categories. Products attach to leaf categories while
+// discount rules resolve against the root category.
 //
 // Ceilings are NOT here: a ceiling only means something for a given customer
 // tier, so it lives on DiscountRule (tier x category) below.
 const CATEGORY_TREE = [
-  { name: 'Hardware', children: [{ name: 'Computers' }] },
-  { name: 'Software', children: [] },
-  { name: 'Service', children: [] },
+  { name: 'Video Surveillance', children: ['IP Cameras', 'Analog Cameras'] },
+  { name: 'Storage & Recording', children: ['NVRs & DVRs', 'Hard Drives'] },
+  { name: 'Networking & Power', children: ['PoE Switches', 'Power & UPS'] },
+  { name: 'Installation & Services', children: ['Installation', 'Maintenance'] },
 ];
 
-// Prices in INR. Cost prices are set so margins differ meaningfully by
-// category: hardware carries healthy margin, services are thin. That
-// difference is what makes the blended discount risk score interesting later.
+// Prices in INR. Images are uploaded separately through the product image
+// endpoint, so the seed does not overwrite imageUrl values already stored.
 // categoryPath resolves against CATEGORY_TREE below at seed time.
 const PRODUCTS = [
   {
-    sku: 'HW-LAPTOP-14',
-    name: 'ProBook 14" Laptop',
-    description: 'Business laptop, 16GB RAM, 512GB SSD',
+    sku: 'CAM-IP-DOME-4MP',
+    name: '4MP IP Dome Camera',
+    description: 'Indoor and outdoor dome camera with infrared night vision.',
     productType: 'GOODS',
-    categoryPath: 'Hardware / Computers',
+    categoryPath: 'Video Surveillance / IP Cameras',
     unit: 'unit',
-    listPrice: 100000,
-    costPrice: 72000,
+    listPrice: 6800,
+    costPrice: 4200,
     taxRate: 18,
   },
   {
-    sku: 'HW-DOCK-01',
-    name: 'Universal Docking Station',
-    description: 'Dual-monitor USB-C dock',
+    sku: 'CAM-IP-BULLET-4MP',
+    name: '4MP IP Bullet Camera',
+    description: 'Weatherproof long-range camera for gates, yards, and perimeters.',
     productType: 'GOODS',
-    categoryPath: 'Hardware / Computers',
+    categoryPath: 'Video Surveillance / IP Cameras',
     unit: 'unit',
-    listPrice: 8000,
-    costPrice: 5000,
+    listPrice: 7400,
+    costPrice: 4600,
     taxRate: 18,
   },
   {
-    sku: 'HW-BAG-01',
-    name: 'Laptop Carry Case',
-    description: 'Padded 14" case',
+    sku: 'CAM-ANALOG-2MP',
+    name: '2MP Analog Dome Camera',
+    description: 'Reliable coaxial camera for cost-conscious surveillance upgrades.',
     productType: 'GOODS',
-    categoryPath: 'Hardware / Computers',
+    categoryPath: 'Video Surveillance / Analog Cameras',
     unit: 'unit',
-    listPrice: 2500,
-    costPrice: 1200,
+    listPrice: 3200,
+    costPrice: 1900,
     taxRate: 18,
   },
   {
-    sku: 'SW-OFFICE-STD',
-    name: 'Office Suite — Standard',
-    description: 'Per-seat productivity suite. Sold outright or on a plan.',
-    productType: 'SERVICE',
-    categoryPath: 'Software',
-    unit: 'seat',
-    listPrice: 12000,
-    costPrice: 6000,
-    taxRate: 18,
-    isSubscribable: true,
-  },
-  {
-    sku: 'SW-CLOUD-BACKUP',
-    name: 'Cloud Backup — 1TB',
-    description: 'Managed offsite backup per device',
-    productType: 'SERVICE',
-    categoryPath: 'Software',
-    unit: 'device',
-    listPrice: 5000,
-    costPrice: 2000,
-    taxRate: 18,
-    isSubscribable: true,
-  },
-  {
-    sku: 'SV-SETUP',
-    name: 'Onsite Setup & Configuration',
-    description: 'Engineer-led deployment, per day',
-    productType: 'SERVICE',
-    categoryPath: 'Service',
-    unit: 'day',
-    listPrice: 20000,
-    costPrice: 16000,
+    sku: 'NVR-16CH-4K',
+    name: '16-Channel 4K NVR',
+    description: 'Network video recorder for up to 16 IP cameras.',
+    productType: 'GOODS',
+    categoryPath: 'Storage & Recording / NVRs & DVRs',
+    unit: 'unit',
+    listPrice: 38000,
+    costPrice: 25000,
     taxRate: 18,
   },
   {
-    sku: 'SV-SUPPORT-PREM',
-    name: 'Premium Support',
-    description: '24/7 support retainer',
+    sku: 'DVR-8CH-5MP',
+    name: '8-Channel 5MP DVR',
+    description: 'Hybrid recorder for analog and HD security cameras.',
+    productType: 'GOODS',
+    categoryPath: 'Storage & Recording / NVRs & DVRs',
+    unit: 'unit',
+    listPrice: 14500,
+    costPrice: 9000,
+    taxRate: 18,
+  },
+  {
+    sku: 'HDD-SURV-4TB',
+    name: '4TB Surveillance Hard Drive',
+    description: '24/7-rated storage designed for continuous video recording.',
+    productType: 'GOODS',
+    categoryPath: 'Storage & Recording / Hard Drives',
+    unit: 'unit',
+    listPrice: 9500,
+    costPrice: 6800,
+    taxRate: 18,
+  },
+  {
+    sku: 'SWITCH-POE-16',
+    name: '16-Port PoE Network Switch',
+    description: 'Powers and connects up to 16 IP cameras over Ethernet.',
+    productType: 'GOODS',
+    categoryPath: 'Networking & Power / PoE Switches',
+    unit: 'unit',
+    listPrice: 14500,
+    costPrice: 9200,
+    taxRate: 18,
+  },
+  {
+    sku: 'UPS-CCTV-1KVA',
+    name: '1KVA CCTV Backup UPS',
+    description: 'Backup power for cameras, recorder, and networking equipment.',
+    productType: 'GOODS',
+    categoryPath: 'Networking & Power / Power & UPS',
+    unit: 'unit',
+    listPrice: 8200,
+    costPrice: 5100,
+    taxRate: 18,
+  },
+  {
+    sku: 'SVC-CCTV-INSTALL',
+    name: 'CCTV Installation & Commissioning',
+    description: 'Professional camera mounting, cabling, configuration, and handover.',
     productType: 'SERVICE',
-    categoryPath: 'Service',
-    unit: 'month',
-    listPrice: 15000,
+    categoryPath: 'Installation & Services / Installation',
+    unit: 'project',
+    listPrice: 25000,
+    costPrice: 18000,
+    taxRate: 18,
+  },
+  {
+    sku: 'SVC-CCTV-AMC',
+    name: 'CCTV Annual Maintenance',
+    description: 'Scheduled health checks, cleaning, testing, and priority support.',
+    productType: 'SERVICE',
+    categoryPath: 'Installation & Services / Maintenance',
+    unit: 'year',
+    listPrice: 18000,
     costPrice: 11500,
     taxRate: 18,
     isSubscribable: true,
-  },
-  {
-    sku: 'SV-TRAINING',
-    name: 'End-user Training',
-    description: 'Half-day session, up to 20 attendees',
-    productType: 'SERVICE',
-    categoryPath: 'Service',
-    unit: 'session',
-    listPrice: 18000,
-    costPrice: 14000,
-    taxRate: 18,
   },
 ];
 
@@ -203,17 +226,17 @@ const WAREHOUSES = [
 // Physical goods only: services and cloud subscriptions are not stocked, which is
 // itself a rule the fulfillment split has to respect later.
 const STOCK = [
-  ['MAIN', 'HW-LAPTOP-14', 6, 5, 20],
-  ['EAST', 'HW-LAPTOP-14', 4, 3, 10],
-  ['NORTH', 'HW-LAPTOP-14', 2, 3, 10],
-
-  ['MAIN', 'HW-DOCK-01', 25, 10, 40],
-  ['EAST', 'HW-DOCK-01', 8, 10, 20],
-
-  ['MAIN', 'HW-BAG-01', 40, 15, 60],
-  ['NORTH', 'HW-BAG-01', 3, 10, 30],
-
-  ['MAIN', 'SW-OFFICE-STD', 100, 20, 100],
+  ['MAIN', 'CAM-IP-DOME-4MP', 24, 6, 30],
+  ['EAST', 'CAM-IP-DOME-4MP', 12, 4, 20],
+  ['MAIN', 'CAM-IP-BULLET-4MP', 18, 5, 24],
+  ['NORTH', 'CAM-IP-BULLET-4MP', 8, 3, 12],
+  ['MAIN', 'CAM-ANALOG-2MP', 20, 5, 25],
+  ['MAIN', 'NVR-16CH-4K', 8, 2, 10],
+  ['EAST', 'NVR-16CH-4K', 4, 1, 6],
+  ['MAIN', 'DVR-8CH-5MP', 10, 2, 12],
+  ['MAIN', 'HDD-SURV-4TB', 15, 4, 20],
+  ['MAIN', 'SWITCH-POE-16', 12, 3, 15],
+  ['MAIN', 'UPS-CCTV-1KVA', 10, 2, 12],
 ];
 
 const DEMO_PASSWORD = 'Password123';
@@ -281,15 +304,16 @@ const main = async () => {
     console.log(`  category  ${root.name}`);
 
     for (const child of root.children) {
+      const childName = typeof child === 'string' ? child : child.name;
       let childRow = await prisma.category.findFirst({
-        where: { name: child.name, parentId: rootRow.id },
+        where: { name: childName, parentId: rootRow.id },
       });
       childRow =
         childRow ??
-        (await prisma.category.create({ data: { name: child.name, parentId: rootRow.id } }));
+        (await prisma.category.create({ data: { name: childName, parentId: rootRow.id } }));
 
-      categoryIdByPath[`${root.name} / ${child.name}`] = childRow.id;
-      console.log(`  category    ${root.name} / ${child.name}`);
+      categoryIdByPath[`${root.name} / ${childName}`] = childRow.id;
+      console.log(`  category    ${root.name} / ${childName}`);
     }
   }
 
@@ -304,6 +328,11 @@ const main = async () => {
     });
     console.log(`  product   ${product.productType.padEnd(8)} ${product.sku.padEnd(18)} ${product.name}`);
   }
+
+  await prisma.product.updateMany({
+    where: { sku: { notIn: PRODUCTS.map((product) => product.sku) } },
+    data: { isActive: false },
+  });
 
   for (const [tierCode, categoryPath, max] of DISCOUNT_RULES) {
     const customerTierId = tierIdByCode[tierCode];

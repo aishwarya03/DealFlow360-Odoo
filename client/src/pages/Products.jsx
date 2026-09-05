@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import {
+  ArrowRight,
+  Boxes,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
@@ -51,12 +59,7 @@ const Products = () => {
         if (cancelled) return;
         setProducts(result.products);
         setPagination(result.pagination);
-        setCategories((current) => {
-          const names = result.products
-            .map((product) => product.category?.path?.split(' / ')[0] ?? product.category?.name)
-            .filter(Boolean);
-          return [...new Set([...current, ...names])];
-        });
+        setCategories(result.categories?.map((category) => category.name) ?? []);
       })
       .catch(() => !cancelled && toast.error('Could not load products'))
       .finally(() => !cancelled && setIsLoading(false));
@@ -90,62 +93,99 @@ const Products = () => {
     <div className="min-h-screen bg-white">
       <SiteHeader />
 
-      <section className="border-b border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-4xl px-6 py-16 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Products &amp; Services
-          </h1>
-          <p className="mx-auto mt-3 max-w-xl text-slate-600">
-            Indicative pricing for planning purposes — every quotation is
-            itemized for your site during a survey. Add anything you&apos;d
-            like priced to your quote cart.
-          </p>
+      <section className="border-b border-slate-200 bg-[#f6f7fb]">
+        <div className="w-full px-6 pb-8 pt-12 sm:px-10 sm:pb-10 sm:pt-16 lg:px-14 xl:px-20">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold tracking-[0.18em] text-brand-600 uppercase">Netrix catalogue</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-5xl">
+              Build your setup.
+            </h1>
+            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
+              Browse hardware, software, and services for a more secure, better-connected workplace.
+            </p>
+          </div>
 
-          <div className="relative mx-auto mt-6 max-w-md">
+          <div className="relative mt-8 max-w-2xl">
             <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-slate-400"
               aria-hidden="true"
             />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products and services…"
+              placeholder="Search cameras, access control, support…"
               aria-label="Search products and services"
-              className="w-full rounded-md border border-slate-300 bg-white py-2 pr-3 pl-9 text-sm text-slate-900 outline-none focus:border-brand-600"
+              className="w-full rounded-lg border border-slate-300 bg-white py-3.5 pr-4 pl-12 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
             />
-          </div>
-
-          <div
-            className="mx-auto mt-4 flex max-w-2xl gap-2 overflow-x-auto pb-1 scrollbar-none"
-            role="tablist"
-            aria-label="Filter by category"
-          >
-            {[
-              { key: ALL, label: 'All' },
-              ...categories.map((category) => ({ key: category, label: category })),
-            ].map((cat) => (
-              <button
-                key={cat.key}
-                type="button"
-                role="tab"
-                aria-selected={activeCategory === cat.key}
-                onClick={() => setActiveCategory(cat.key)}
-                className={cn(
-                  'shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
-                  activeCategory === cat.key
-                    ? 'border-brand-600 bg-brand-600 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                )}
-              >
-                {cat.label}
-              </button>
-            ))}
           </div>
         </div>
       </section>
 
-      <div ref={gridRef} className="mx-auto max-w-6xl px-6 py-16">
+      <div ref={gridRef} className="grid w-full gap-8 px-6 py-10 sm:px-10 lg:grid-cols-[220px_1fr] lg:gap-12 lg:px-14 lg:py-12 xl:px-20">
+        <aside className="hidden lg:block">
+          <div className="sticky top-24">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <SlidersHorizontal className="size-4 text-brand-600" aria-hidden="true" />
+              Browse by category
+            </div>
+            <div className="mt-4 space-y-1 border-l border-slate-200 pl-3" role="tablist" aria-label="Filter by category">
+              {[{ key: ALL, label: 'All products' }, ...categories.map((category) => ({ key: category, label: category }))].map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeCategory === cat.key}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition',
+                    activeCategory === cat.key
+                      ? 'bg-brand-50 font-semibold text-brand-700'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  )}
+                >
+                  {cat.label}
+                  {activeCategory === cat.key && <CircleCheck className="size-4" aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+            <div className="mt-10 rounded-lg bg-slate-950 p-4 text-white">
+              <Boxes className="size-5 text-brand-300" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold">Need a complete setup?</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">Tell us about your site and we&apos;ll shape the right bundle.</p>
+              <Link to="/request-quote" className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-white hover:text-brand-200">
+                Talk to sales <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+          </div>
+        </aside>
+
+        <main className="min-w-0">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">{activeCategory === ALL ? 'All products' : activeCategory}</h2>
+              <p className="mt-1 text-xs text-slate-500">Showing carefully selected products and services</p>
+            </div>
+            <div className="flex w-full flex-wrap gap-2 lg:hidden" role="tablist" aria-label="Filter by category">
+              {[{ key: ALL, label: 'All products' }, ...categories.map((category) => ({ key: category, label: category }))].map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeCategory === cat.key}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-sm font-medium transition',
+                    activeCategory === cat.key
+                      ? 'border-brand-200 bg-brand-50 text-brand-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
         {isLoading ? (
           <div className="py-16 text-center text-sm text-slate-500">
             Loading products…
@@ -171,7 +211,7 @@ const Products = () => {
           />
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {products.map((product, index) => (
                 <Reveal key={product.id} delay={index * 40}>
                   <ProductCard
@@ -211,7 +251,7 @@ const Products = () => {
           </>
         )}
 
-        <Reveal className="mt-14 rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+        <Reveal className="mt-14 rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
           <h2 className="text-lg font-semibold text-slate-900">
             Don&apos;t see exactly what you need?
           </h2>
@@ -226,6 +266,7 @@ const Products = () => {
             </Button>
           </Link>
         </Reveal>
+        </main>
       </div>
 
       <SiteFooter />
