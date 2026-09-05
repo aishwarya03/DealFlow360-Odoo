@@ -61,6 +61,8 @@ const assertCategoryExists = async (categoryId) => {
 
 export const listProducts = async (filters = {}) => {
   const where = {};
+  const page = filters.page ?? 1;
+  const limit = filters.limit ?? 12;
 
   // Inactive products stay out of every list unless explicitly asked for: a
   // discontinued product must not appear in the quotation builder.
@@ -74,6 +76,15 @@ export const listProducts = async (filters = {}) => {
     where.categoryId = { in: await getDescendantCategoryIds(filters.categoryId) };
   }
 
+  if (filters.category) {
+    where.category = {
+      OR: [
+        { name: { equals: filters.category, mode: 'insensitive' } },
+        { parent: { name: { equals: filters.category, mode: 'insensitive' } } },
+      ],
+    };
+  }
+
   if (filters.search) {
     where.OR = [
       { name: { contains: filters.search, mode: 'insensitive' } },
@@ -81,13 +92,51 @@ export const listProducts = async (filters = {}) => {
     ];
   }
 
-  const products = await prisma.product.findMany({
-    where,
-    include: withCategory,
-    orderBy: [{ name: 'asc' }],
-  });
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include: withCategory,
+      orderBy: [{ name: 'asc' }],
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.product.count({ where }),
+  ]);
 
-  return products.map(toPublicProduct);
+  return {
+    products: products.map(toPublicProduct),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+  };
+};
+
+export const listPublicProducts = async (filters = {}) => {
+  const result = await listProducts({ ...filters, includeInactive: 'false' });
+
+  return {
+    products: result.products.map((product) => ({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      description: product.description,
+      productType: product.productType,
+      category: product.category,
+      unit: product.unit,
+      imageUrl: product.imageUrl,
+      isSubscribable: product.isSubscribable,
+      listPrice: product.listPrice,
+      taxRate: product.taxRate,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      price: product.listPrice,
+      cycle: product.isSubscribable ? 'month' : null,
+    })),
+    pagination: result.pagination,
+  };
 };
 
 export const getProductById = async (id) => {

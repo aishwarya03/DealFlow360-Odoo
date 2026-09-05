@@ -27,10 +27,10 @@ const Dashboard = () => {
     let cancelled = false;
 
     Promise.all([listProducts(), listCustomers(), listWarehouses(), listLowStock()])
-      .then(([products, customers, warehouses, lowStock]) => {
+      .then(([productsResult, customers, warehouses, lowStock]) => {
         if (cancelled) return;
         setCounts({
-          products: products.length,
+          products: productsResult.pagination.total,
           customers: customers.length,
           warehouses: warehouses.length,
           lowStock: lowStock.length,
