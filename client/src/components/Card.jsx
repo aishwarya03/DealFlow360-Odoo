@@ -1,7 +1,10 @@
+import { cn } from '../lib/cn';
+
+/* Borders over shadows — the system leans on outlines, not elevation. */
 const Card = ({ children, className = '', ...props }) => {
   return (
     <div
-      className={`rounded-lg border bg-white p-6 shadow-sm ${className}`}
+      className={cn('rounded-lg border border-slate-200 bg-white p-6', className)}
       {...props}
     >
       {children}
