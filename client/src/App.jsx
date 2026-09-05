@@ -6,16 +6,12 @@ import AppRoutes from './routes/AppRoutes';
 
 function App() {
   return (
-    <>
     <AuthProvider>
-      <AppRoutes />
-      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+      <CartProvider>
+        <AppRoutes />
+        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+      </CartProvider>
     </AuthProvider>
-    <CartProvider>
-      <AppRoutes />
-      <Toaster position="bottom-right" toastOptions={{ duration: 2500 }} />
-    </CartProvider>
-    </>
   );
 }
 

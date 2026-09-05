@@ -64,8 +64,11 @@ export const updateProductSchema = z
 // Query strings arrive as text, so booleans and numbers are coerced here.
 export const listProductsSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
+  category: z.string().trim().min(1).optional(),
   productType: z.enum(PRODUCT_TYPES).optional(),
   search: z.string().trim().min(1).optional(),
   isSubscribable: z.enum(['true', 'false']).optional(),
   includeInactive: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(12),
 });

@@ -3,9 +3,15 @@ import { sendSuccess } from '../../utils/apiResponse.js';
 import * as productService from './product.service.js';
 
 export const list = async (req, res) => {
-  const products = await productService.listProducts(req.validatedQuery);
+  const result = await productService.listProducts(req.validatedQuery);
 
-  sendSuccess(res, 'Products', { products, count: products.length });
+  sendSuccess(res, 'Products', result);
+};
+
+export const publicList = async (req, res) => {
+  const result = await productService.listPublicProducts(req.validatedQuery);
+
+  sendSuccess(res, 'Products', result);
 };
 
 export const getOne = async (req, res) => {

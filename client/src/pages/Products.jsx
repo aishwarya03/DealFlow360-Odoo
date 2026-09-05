@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, ChevronLeft, ChevronRight, Search } from 'lucide-react';
@@ -9,7 +9,7 @@ import ProductCard from '../components/ProductCard';
 import Reveal from '../components/Reveal';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
-import { CATALOG, CATEGORIES } from '../data/catalog';
+import { listPublicProducts } from '../api/products';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 import { useCart } from '../hooks/useCart';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -28,18 +28,43 @@ const Products = () => {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [activeCategory, setActiveCategory] = useState(ALL);
   const [page, setPage] = useState(1);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Any change to what's being filtered should start back at page 1 —
-  // otherwise a narrower search can strand you on a page that no longer
-  // exists. Adjusted during render (React's recommended pattern for
-  // resetting state on a prop/derived-value change) rather than an effect,
-  // which would cost an extra commit for the same result.
-  const filterKey = `${debouncedSearch}|${activeCategory}`;
-  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
-  if (filterKey !== lastFilterKey) {
-    setLastFilterKey(filterKey);
+  useEffect(() => {
     setPage(1);
-  }
+  }, [debouncedSearch, activeCategory]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+
+    listPublicProducts({
+      page,
+      limit: PAGE_SIZE,
+      ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+      ...(activeCategory !== ALL ? { category: activeCategory } : {}),
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setProducts(result.products);
+        setPagination(result.pagination);
+        setCategories((current) => {
+          const names = result.products
+            .map((product) => product.category?.path?.split(' / ')[0] ?? product.category?.name)
+            .filter(Boolean);
+          return [...new Set([...current, ...names])];
+        });
+      })
+      .catch(() => !cancelled && toast.error('Could not load products'))
+      .finally(() => !cancelled && setIsLoading(false));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [page, debouncedSearch, activeCategory]);
 
   const handleAdd = (product) => {
     addItem(product, 1);
@@ -52,23 +77,9 @@ const Products = () => {
     navigate('/request-quote', { state: { items: [{ ...product, quantity }] } });
   };
 
-  const query = debouncedSearch.trim().toLowerCase();
-  const filtered = CATALOG.filter((product) => {
-    const matchesCategory =
-      activeCategory === ALL || product.category === activeCategory;
-    const matchesQuery =
-      query === '' ||
-      product.name.toLowerCase().includes(query) ||
-      product.description.toLowerCase().includes(query);
-    return matchesCategory && matchesQuery;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+  const query = debouncedSearch.trim();
+  const totalPages = pagination.totalPages ?? 1;
+  const currentPage = pagination.page ?? page;
 
   const goToPage = (next) => {
     setPage(next);
@@ -110,7 +121,10 @@ const Products = () => {
             role="tablist"
             aria-label="Filter by category"
           >
-            {[{ key: ALL, label: 'All' }, ...CATEGORIES].map((cat) => (
+            {[
+              { key: ALL, label: 'All' },
+              ...categories.map((category) => ({ key: category, label: category })),
+            ].map((cat) => (
               <button
                 key={cat.key}
                 type="button"
@@ -132,7 +146,11 @@ const Products = () => {
       </section>
 
       <div ref={gridRef} className="mx-auto max-w-6xl px-6 py-16">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-slate-500">
+            Loading products…
+          </div>
+        ) : products.length === 0 ? (
           <EmptyState
             icon={Search}
             title={
@@ -154,7 +172,7 @@ const Products = () => {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {pageItems.map((product, index) => (
+              {products.map((product, index) => (
                 <Reveal key={product.id} delay={index * 40}>
                   <ProductCard
                     product={product}

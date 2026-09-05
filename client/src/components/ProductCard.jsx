@@ -1,4 +1,4 @@
-import { Minus, Plus, ShoppingCart } from 'lucide-react';
+import { Minus, Package, Plus, ShoppingCart } from 'lucide-react';
 
 import Button from './Button';
 import { CATEGORY_ICONS, CATEGORY_LABELS } from '../data/catalog';
@@ -17,14 +17,19 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
   const { items, updateQuantity } = useCart();
   const cartQuantity = items.find((i) => i.id === product.id)?.quantity ?? 0;
   const inCart = cartQuantity > 0;
-  const Icon = CATEGORY_ICONS[product.category];
+  const Icon = CATEGORY_ICONS[product.category] || Package;
+  const imageUrl = product.imageUrl?.startsWith('http')
+    ? product.imageUrl
+    : product.imageUrl
+      ? `${import.meta.env.VITE_API_URL}${product.imageUrl}`
+      : null;
 
   return (
     <div className="flex flex-col rounded-lg border border-slate-200 bg-white p-5">
       <div className="mx-auto flex aspect-square w-28 shrink-0 items-center justify-center rounded-md bg-slate-100 sm:w-32">
-        {product.imageUrl ? (
+        {imageUrl ? (
           <img
-            src={product.imageUrl}
+            src={imageUrl}
             alt={product.name}
             className="size-full rounded-md object-contain"
           />
@@ -34,7 +39,7 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
       </div>
 
       <p className="mt-4 text-[11px] font-medium tracking-wide text-slate-400 uppercase">
-        {CATEGORY_LABELS[product.category]}
+        {CATEGORY_LABELS[product.category] ?? product.category?.path ?? product.category?.name ?? product.productType}
       </p>
       <h3 className="mt-0.5 text-sm font-semibold text-slate-900">
         {product.name}
