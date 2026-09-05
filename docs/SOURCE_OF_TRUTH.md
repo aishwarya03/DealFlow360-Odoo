@@ -43,6 +43,16 @@ Per warehouse per product: `onHand`, `reserved`, `available` (`= onHand - reserv
 
 **Why:** mockup Screen 7 shows exactly these three columns. A single "quantity" field can't express "this stock exists but is already promised to another order," which is the entire premise of backorder handling.
 
+### 1.6 A rejected/withdrawn quotation can be re-quoted — as a new, linked row
+
+`REJECTED` (an approver said no) and `WITHDRAWN` (the customer said no) are both terminal for that `Quotation` row, but not for the deal. A rep can open a `REJECTED` or `WITHDRAWN` quotation and choose "Create New Quotation" from inside it; that creates a new `Quotation` with `previousQuotationId` pointing at the one it replaces, inheriting the customer and a copy of the lines (re-snapshotted against current prices/rules). `sourceQuoteRequestId` (§2.11), if the chain started from a public lead, is copied forward to every quotation in the chain.
+
+**Why a new row, not reopening the old one:** `RETURNED` (an approval step sends a quotation back for rework) already loops the *same row* back to `DRAFT` — that path exists precisely for "needs changes, same deal." `REJECTED`/`WITHDRAWN` are meant to be a harder, final no; if either looped back to `DRAFT` too, a quotation's own `status` could walk all the way to `CONFIRMED` with no trace that it was ever rejected, breaking win/loss reporting. A new linked row keeps the rejected/withdrawn record permanently honest while still letting the deal continue.
+
+**Why a chain (`previousQuotationId` is `@unique`), not a flat link to the original lead:** the same re-quote-after-no can happen more than once (reject → child → withdrawn → child → …). A unique self-relation makes this a strict linked list, walkable in either direction, rather than a branching tree — matching that only one live attempt should ever exist per deal at a time (enforced in the service layer: a child can only be requested from a source that is already `REJECTED` or `WITHDRAWN`, never from a live one).
+
+No stored sequence number — "3rd attempt on this deal" is a chain-walk at read time if ever displayed, same as everything else in this schema that's derived rather than stored.
+
 ---
 
 ## 2. Data model
@@ -96,129 +106,155 @@ model Company {
 
 ### 2.2 Customers (also the portal login)
 
+**Superseded from the original draft — `CustomerTier` is a real table with a scoring engine, not an enum.** Built in `0e38df4`/`ee39862`, independently of this doc. An admin doesn't assign a customer's tier; it's *calculated*:
+
 ```
-enum CustomerTier {
-  BRONZE
-  SILVER
-  GOLD
+// A table, not an enum: adding PLATINUM is a row, not a migration.
+model CustomerTier {
+  id                        Int     @id @default(autoincrement())
+  code                      String  @unique   // BRONZE | SILVER | GOLD | PLATINUM (seeded)
+  name                      String
+  rank                      Int     @unique   // ordering only
+  minScore                  Int     @default(0)   // lands the highest tier a customer's score reaches
+  defaultMaxDiscountPercent Decimal @db.Decimal(5, 2)  // tier-wide ceiling, order-level check only (§3)
+  financeEscalationSeverity Decimal @db.Decimal(5, 2) @default(5) // blended severity above which Finance joins Manager
 }
 
-// Authenticates against /api/portal/* only, never internal routes (once that
-// auth endpoint exists — see §7). passwordHash is nullable: a Customer exists
-// as a sales entity the moment a rep creates it, long before it's given
-// portal access.
-model Customer {
-  id           Int          @id @default(autoincrement())
-  name         String
-  email        String       @unique
-  passwordHash String?
-  tier         CustomerTier @default(BRONZE)
-  contactName  String?
-  phone        String?
-  isActive     Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+// Singleton. Weights (must total 100) and targets the scoring engine reads —
+// tunable by an admin, not compiled into the calculation.
+model TierScoringConfig {
+  id Int @id @default(1)
+  purchaseValueWeight, orderCountWeight, recencyWeight, relationshipWeight  Decimal
+  purchaseValueTarget, orderCountTarget, recencyHorizonDays, relationshipTargetYears
+}
 
-  quotations          Quotation[]
-  negotiationMessages NegotiationMessage[]
+model Customer {
+  id           Int     @id @default(autoincrement())
+  name         String
+  email        String  @unique
+  passwordHash String?
+
+  tierId           Int
+  tier             CustomerTier @relation(fields: [tierId], references: [id])
+  tierScore        Decimal      @db.Decimal(5, 2) @default(0)
+  tierCalculatedAt DateTime?
+
+  // Raw metrics the score is computed from. Stored here because there was no
+  // order history when this was built; once Quotation confirmation is wired
+  // to feed these (open item, §7), they become derived instead of seeded.
+  totalPurchaseValue Decimal   @db.Decimal(14, 2) @default(0)
+  completedOrders    Int       @default(0)
+  lastOrderAt        DateTime?
+  customerSince      DateTime  @default(now())
+
+  contactName String?
+  phone       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotations Quotation[]
 
   @@map("customers")
 }
 ```
 
+Recalculated by `tierScoring.service.js`'s `recalculateAllTiers()` — a weighted blend of purchase value, order count, recency, and relationship length against `TierScoringConfig`'s targets. `NegotiationMessage` (portal negotiation) is not built yet — see §2.7, unchanged from the original draft, still not started.
+
 ### 2.3 Catalog
 
-**Already built, and better than the original draft.** That draft made `SUBSCRIPTION` a third product category — meaning a recurring product would need its own discount ceiling, and the brief's worked example only defines Hardware and Service ceilings. The real schema keeps category as *what the product is* (the ceiling lookup) and treats recurring billing as an orthogonal axis: `isSubscribable` here, the actual cycle chosen **per `QuotationLine`**, not fixed on the product — the same product could conceivably be sold one-time to one customer and on a plan to another. Adopted; `DEMO_SCENARIO.md`'s catalog table is updated to match (category = Hardware/Software/Service; "Subscription" items are Software or Service with `isSubscribable = true`).
+**Superseded twice over from the original draft, both times for the better.** First cut: `category` was a `HARDWARE/SOFTWARE/SERVICE` enum (dropping the original draft's `SUBSCRIPTION`-as-category mistake — recurring billing is `isSubscribable` here, the cycle chosen **per `QuotationLine`**, since the same product can be sold one-time to one customer and on a plan to another). **Second cut, built in `0e38df4`/`ee39862`: category is now `Category`, a real self-referencing tree an admin manages like products, not a fixed enum** — a `ProductType` enum (`GOODS`/`SERVICE`/`COMBO`) was split off to separately answer "is this stocked at all," orthogonal to which category it's filed under.
 
 ```
-enum ProductCategory {
-  HARDWARE
-  SOFTWARE
+// Physical/stocking nature — orthogonal to Category. Services are never stocked.
+enum ProductType {
+  GOODS
   SERVICE
+  COMBO
+}
+
+// A real tree: a product can attach at a root ("Software") or a leaf
+// ("Hardware / Computers"). Ceilings are NOT here — see §2.4, DiscountRule.
+model Category {
+  id       Int        @id @default(autoincrement())
+  name     String
+  parentId Int?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@unique([parentId, name])
 }
 
 model Product {
-  id             Int             @id @default(autoincrement())
-  sku            String          @unique
+  id             Int         @id @default(autoincrement())
+  sku            String      @unique
   name           String
   description    String?
-  category       ProductCategory
-  unit           String          @default("unit")
-  isSubscribable Boolean         @default(false)
-  listPrice      Decimal         @db.Decimal(12, 2)
-  costPrice      Decimal         @db.Decimal(12, 2) // margin — see §3.4
-  taxRate        Decimal         @db.Decimal(5, 2)  @default(0)
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  productType    ProductType @default(GOODS)
+  categoryId     Int
+  category       Category    @relation(fields: [categoryId], references: [id])
+  unit           String      @default("unit")
+  imageUrl       String?
+  isSubscribable Boolean     @default(false)
+  listPrice      Decimal     @db.Decimal(12, 2)
+  costPrice      Decimal     @db.Decimal(12, 2) // margin — see §3.4
+  taxRate        Decimal     @db.Decimal(5, 2)  @default(0)
+  isActive       Boolean     @default(true)
 
-  inventory        Inventory[]
-  discountCeilings CategoryDiscountCeiling[]
-  quotationLines   QuotationLine[]
-  upsellFrom       UpsellRule[] @relation("UpsellSource")
-  upsellTo         UpsellRule[] @relation("UpsellTarget")
+  inventory      Inventory[]
+  quotationLines QuotationLine[]
 
-  @@index([category])
+  @@index([categoryId])
   @@map("products")
 }
 
-// Not on Product — chosen per QuotationLine (see §2.5), since recurring vs
-// one-time is a per-sale decision, not a catalog-fixed one.
+// Not on Product — chosen per QuotationLine (§2.5), since one-time vs
+// recurring is a per-sale decision, not a catalog-fixed one.
 enum RecurringCycle {
   MONTHLY
   QUARTERLY
   YEARLY
 }
-
-/* Not yet built. A2/A6: pairing-based upsell, seeded from co-purchase + promotion flags. */
-model UpsellRule {
-  id               Int     @id @default(autoincrement())
-  sourceProductId  Int
-  targetProductId  Int
-  source Product @relation("UpsellSource", fields: [sourceProductId], references: [id])
-  target Product @relation("UpsellTarget", fields: [targetProductId], references: [id])
-  promoted         Boolean @default(false)
-  minMarginPercent Decimal @default(0)
-}
 ```
+
+`UpsellRule` (A2/A6, pairing-based upsell) is still not built — unaffected by the category rework, revisit when that slice starts.
 
 ### 2.4 Discount governance (A3 / Section 10)
 
-*Not yet built — next slice after auth/customers/products/warehouses.*
+**Built in `0e38df4`/`ee39862` — a materially different, more complete design than this file originally proposed.** The two-ceiling model (`TierDiscountCeiling` × `CategoryDiscountCeiling`, `min()`'d together) and the `RiskBand`/`ApprovalRoutingRule` config table **do not exist and should not be built** — both are superseded by what's below. `evaluateDiscount()` in `discountEvaluation.service.js` already fully implements the routing decision described in §3.
 
 ```
-model TierDiscountCeiling {
-  id          Int          @id @default(autoincrement())
-  tier        CustomerTier @unique
-  maxDiscount Decimal      @db.Decimal(5, 2) // percent
-}
+model DiscountRule {
+  id             Int          @id @default(autoincrement())
+  customerTierId Int
+  customerTier   CustomerTier @relation(fields: [customerTierId], references: [id])
+  categoryId     Int
+  category       Category     @relation(fields: [categoryId], references: [id])
+  maxDiscountPercent Decimal  @db.Decimal(5, 2)
+  isActive       Boolean      @default(true)
 
-model CategoryDiscountCeiling {
-  id          Int             @id @default(autoincrement())
-  category    ProductCategory @unique
-  maxDiscount Decimal         @db.Decimal(5, 2)
-}
-
-/* Which band needs which chain. Seeded, editable by Admin (Screen 18). */
-model ApprovalRoutingRule {
-  id              Int      @id @default(autoincrement())
-  riskBand        RiskBand @unique
-  requiresManager Boolean  @default(false)
-  requiresFinance Boolean  @default(false)
-}
-
-enum RiskBand {
-  LOW
-  MEDIUM
-  HIGH
+  // Exactly one rule per (tier, category) pair. Resolution walks UP the
+  // category tree from a product's own category — a rule on "Hardware"
+  // also governs "Hardware / Computers" — and a missing rule anywhere up
+  // the chain is a thrown business error, never a silent allowance.
+  @@unique([customerTierId, categoryId])
 }
 ```
 
-See §3 for how the band is computed — it is **derived at evaluation time**, not stored as a standalone editable number; only the ceilings and routing thresholds are configuration.
+Two config tables replace `TierDiscountCeiling`/`CategoryDiscountCeiling`/`ApprovalRoutingRule` entirely:
+- **`DiscountRule.maxDiscountPercent`** — the per-line ceiling (§3.1), one direct lookup instead of `min(tier, category)`.
+- **`CustomerTier.financeEscalationSeverity`** (§2.2) — the blended-severity threshold above which Finance joins the Sales Manager (§3.2). Routing is no longer a separate `RiskBand`→chain config table; it's computed directly: any breach → Manager; `blendedSeverity > financeEscalationSeverity` → also Finance.
+
+See §3 for the full computation — still derived at evaluation time, never stored as a standalone number; only `DiscountRule` rows and `financeEscalationSeverity` are configuration.
 
 ### 2.5 The quotation
 
-*Not yet built — this is the next real slice of work.*
+**Built 2026-09-05, migration `quotation_lifecycle_core`.** Three things here differ from the original draft, decided in the design conversation that preceded this migration:
+
+- **No stored `code` column.** `"Q-1042"` is 100% derivable from the autoincrement `id` (`Q-${1000 + id}`) — storing it would mean a two-step insert just to satisfy a unique-not-null constraint for a value that can never legitimately drift. Computed in the serializer instead, same "derived, never stored" rule as `Inventory.available` (§1.5).
+- **`WITHDRAWN` added alongside `REJECTED`**, and a self-referencing `previousQuotationId` chain (§1.6) — both new since the original draft only had a bare `REJECTED` with no way to re-attempt a dead deal.
+- **`confirmedAt`, `customerReference`, `notes`, `updatedAt` added** — the first three inspired by Odoo's `sale.order` (`date_order`'s confirmation analogue, `client_order_ref`, `note`); `updatedAt` was simply missing despite every other model having it.
 
 ```
 enum QuotationStatus {
@@ -227,64 +263,90 @@ enum QuotationStatus {
   APPROVED
   UNDER_NEGOTIATION
   CONFIRMED
-  REJECTED
+  REJECTED    // an approver said no — terminal for this row (§1.6)
+  WITHDRAWN   // the customer said no — terminal for this row (§1.6)
 }
 
 model Quotation {
-  id          Int             @id @default(autoincrement())
-  code        String          @unique // "Q-1042"
-  customerId  Int
-  customer    Customer        @relation(fields: [customerId], references: [id])
-  ownerId     Int             // sales rep
-  owner       User            @relation("QuotationOwner", fields: [ownerId], references: [id])
-  status      QuotationStatus @default(DRAFT)
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ownerId    Int      // sales rep
+  owner      User     @relation("QuotationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  status     QuotationStatus @default(DRAFT)
 
   termsVersion         Int @default(1)
-  approvedTermsVersion Int? // null until first approval
+  approvedTermsVersion Int? // null until first approval; valid only while === termsVersion
 
-  lastActivityAt DateTime @default(now()) // drives "stalled" on the Deal Health dashboard
+  customerReference String? // the customer's own PO / reference number
+  notes             String? // free-text terms, printed on the quote
+  confirmedAt       DateTime? // set once, on the transition into CONFIRMED
+
+  // Which public lead (if any) started this chain — copied forward at
+  // creation time to every quotation in the chain (§2.11, §1.6).
+  sourceQuoteRequestId Int?
+  sourceQuoteRequest   QuoteRequest? @relation(fields: [sourceQuoteRequestId], references: [id], onDelete: SetNull)
+
+  // The REJECTED/WITHDRAWN quotation this one re-quotes, if any (§1.6).
+  // @unique makes it a strict chain, not a branching tree.
+  previousQuotationId Int?       @unique
+  previousQuotation   Quotation? @relation("QuotationSupersession", fields: [previousQuotationId], references: [id], onDelete: SetNull)
+  supersededBy        Quotation? @relation("QuotationSupersession")
+
+  lastActivityAt DateTime @default(now()) // curated — bumped only on real activity, drives "stalled" (§2.10)
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt        // raw DB bookkeeping, distinct from lastActivityAt above
 
-  lines                 QuotationLine[]
-  approvalRequests      ApprovalRequest[]
-  negotiationMessages   NegotiationMessage[]
-  fulfillmentSplits     FulfillmentSplit[]
-  subscriptionSchedules SubscriptionSchedule[]
-  invoices              Invoice[]
-  auditLog              AuditLog[]
+  lines            QuotationLine[]
+  approvalRequests ApprovalRequest[]
+  auditLog         AuditLog[]
+  // negotiationMessages / fulfillmentSplits / subscriptionSchedules / invoices — later slices, §2.7–2.9
 
+  @@index([customerId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([status, lastActivityAt])
+  @@index([sourceQuoteRequestId])
+  @@index([confirmedAt])
   @@map("quotations")
 }
 
 model QuotationLine {
-  id              Int       @id @default(autoincrement())
-  quotationId     Int
-  quotation       Quotation @relation(fields: [quotationId], references: [id])
-  productId       Int
-  product         Product   @relation(fields: [productId], references: [id])
-  quantity        Int
-  unitPrice       Decimal   @db.Decimal(12, 2) // snapshot of Product.listPrice at add-time
-  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity    Int
 
-  // Denormalized at write-time so history survives a later ceiling change.
-  ceilingAtEntry  Decimal   @db.Decimal(5, 2)
+  // Snapshotted at add-time, never recomputed live — an already-approved
+  // quotation must not silently drift when Admin later changes a price, a
+  // DiscountRule, or a GST rate. The audit trail must reflect what was
+  // actually approved, at the time it was approved.
+  unitPrice       Decimal @db.Decimal(12, 2) // Product.listPrice at add-time
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  ceilingAtEntry  Decimal @db.Decimal(5, 2) // resolved DiscountRule.maxDiscountPercent at add-time (§2.4)
+  taxRateAtEntry  Decimal @db.Decimal(5, 2) // Product.taxRate at add-time — added alongside the other two snapshots
 
-  // Per-line billing mode — see §2.3: Product.isSubscribable gates whether
-  // this is allowed, the actual choice is made here, per sale.
   isRecurring    Boolean         @default(false)
   recurringCycle RecurringCycle?
 
+  @@index([quotationId])
+  @@index([productId])
   @@map("quotation_lines")
 }
 ```
 
-**Why snapshot `unitPrice` and `ceilingAtEntry` onto the line** rather than always reading live from `Product`/ceiling config: if Admin changes a discount ceiling next week, an already-approved quotation from today must not silently become "over limit" retroactively. The audit trail has to reflect what was actually approved, at the time it was approved.
-
 ### 2.6 Approval
 
-*Not yet built.*
+**Built alongside §2.5.** `riskBand`/`RiskBand` from the original draft doesn't exist — §2.4's rework replaced bands with a direct `ApprovalLevel`, which is exactly the `APPROVAL_LEVEL` constant already defined in `discountEvaluation.service.js` (that file's own comment predicted this: *"becomes a stored enum [when] the ApprovalRequest/ApprovalStep chain arrives with the quotation slice"*). `NONE` is not a stored value — a fully compliant quotation auto-confirms with no `ApprovalRequest` row at all (§4).
 
 ```
+enum ApprovalLevel {
+  MANAGER
+  MANAGER_FINANCE
+}
+
 enum ApprovalRequestStatus {
   PENDING
   APPROVED
@@ -293,15 +355,19 @@ enum ApprovalRequestStatus {
 }
 
 model ApprovalRequest {
-  id           Int       @id @default(autoincrement())
-  quotationId  Int
-  quotation    Quotation @relation(fields: [quotationId], references: [id])
-  termsVersion Int       // snapshot: which version this request is judging
-  riskBand     RiskBand
-  status       ApprovalRequestStatus @default(PENDING)
-  createdAt    DateTime  @default(now())
+  id            Int       @id @default(autoincrement())
+  quotationId   Int
+  quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  termsVersion  Int           // snapshot: which version this request is judging
+  approvalLevel ApprovalLevel // from evaluateDiscount()
+  status        ApprovalRequestStatus @default(PENDING)
+  createdAt     DateTime  @default(now())
 
   steps ApprovalStep[]
+
+  @@index([quotationId])
+  @@index([status])
+  @@map("approval_requests")
 }
 
 enum ApprovalStepRole {
@@ -318,18 +384,24 @@ enum ApprovalStepStatus {
 }
 
 model ApprovalStep {
-  id                Int      @id @default(autoincrement())
+  id                Int             @id @default(autoincrement())
   approvalRequestId Int
-  approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id])
+  approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
   role              ApprovalStepRole
-  sequence          Int      // 1 = Sales Manager, 2 = Finance
+  sequence          Int // 1 = Sales Manager, 2 = Finance — generated from evaluateDiscount()'s approvalChain
   status            ApprovalStepStatus @default(PENDING)
   actedById         Int?
-  actedBy           User?    @relation(fields: [actedById], references: [id])
+  actedBy           User?     @relation(fields: [actedById], references: [id], onDelete: SetNull)
   note              String?
   actedAt           DateTime?
+
+  @@unique([approvalRequestId, sequence])
+  @@index([role, status])
+  @@map("approval_steps")
 }
 ```
+
+FK policy applied throughout §2.5–2.6, decided once and reused everywhere rather than case-by-case: references to master data (`Customer`, `User`, `Product`) are `Restrict` (the app already only soft-deletes these via `isActive` — see `customer.service.js`/`product.service.js` — so the DB now guarantees what the app already does); a detail row's reference to its own aggregate root (`QuotationLine`/`ApprovalRequest`/`AuditLog` → `Quotation`, `ApprovalStep` → `ApprovalRequest`) is `Cascade`; nullable "who acted" references (`ApprovalStep.actedById`, `AuditLog.userId`, `Quotation.sourceQuoteRequestId`/`previousQuotationId`) are `SetNull` — the record itself must outlive the thing it points to.
 
 ### 2.7 Negotiation (portal)
 
@@ -519,18 +591,20 @@ model CreditNote {
 
 ### 2.10 Audit & deal health
 
-*Not yet built.*
+**Built alongside §2.5–2.6.**
 
 ```
 model AuditLog {
   id          Int       @id @default(autoincrement())
   quotationId Int
-  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   userId      Int?
-  user        User?     @relation(fields: [userId], references: [id])
-  action      String    // "APPROVED", "REJECTED", "RETURNED", "LINE_EDITED", "COUNTER_APPLIED", ...
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String    // "APPROVED", "REJECTED", "RETURNED", "WITHDRAWN", "LINE_EDITED", ...
   note        String?
   createdAt   DateTime  @default(now())
+
+  @@index([quotationId, createdAt])
 }
 ```
 
@@ -538,7 +612,7 @@ model AuditLog {
 
 ### 2.11 Public quote requests (leads)
 
-*Not yet built.* Added 2026-09-05 — the public site's "Request a Quote" form submits to this, not to `Quotation`. Deliberately a separate, minimal model: the submitter has no account and isn't a `Customer` yet — forcing the form through `Quotation`/`Customer` creation would mean either an unauthenticated write path into real sales data, or inventing a placeholder Customer for every anonymous enquiry. A rep reviews the lead and manually creates a real `Customer` + `Quotation` if it goes anywhere; no automatic conversion logic, nothing to keep in sync.
+**Schema built alongside §2.5** (the `Quotation.sourceQuoteRequestId` link in §1.6/§2.5 needed it to exist). The public API endpoint is still not built — see below. The public site's "Request a Quote" form submits to this, not to `Quotation`. Deliberately a separate, minimal model: the submitter has no account and isn't a `Customer` yet — forcing the form through `Quotation`/`Customer` creation would mean either an unauthenticated write path into real sales data, or inventing a placeholder Customer for every anonymous enquiry. A rep reviews the lead and manually creates a real `Customer` + `Quotation` if it goes anywhere; no automatic conversion logic, nothing to keep in sync.
 
 Updated 2026-09-05: the public Products page now has a "quote cart" (add multiple products, adjust quantity, review on `/cart`) instead of one free-text field only. `message` stays for context, `items` carries the structured picks:
 
@@ -560,6 +634,8 @@ model QuoteRequest {
   items       Json?    // [{ productName: string, quantity: number }], structured cart picks
   status      QuoteRequestStatus @default(NEW)
   createdAt   DateTime @default(now())
+
+  quotations  Quotation[] // reps' manually-created quotations that trace back to this lead — §1.6, §2.5
 }
 ```
 
@@ -573,49 +649,46 @@ model QuoteRequest {
 
 ## 3. The blended discount risk score
 
-The brief (Section 10) devotes a full page to this and gives no formula — it describes *symptoms* a correct formula must reproduce. Reverse-engineered from the worked example plus mockup Screen 18, the model has **three independent triggers**, not one number:
+The brief (Section 10) devotes a full page to this and gives no formula — it describes *symptoms* a correct formula must reproduce. **Implemented** (`discountEvaluation.service.js`'s `evaluateDiscount({ customerId, lines })`), superseding the `RiskBand`-based design originally sketched here. Same three triggers as originally reverse-engineered from the worked example plus mockup Screen 18 — the routing mechanism underneath changed with §2.4's rework, the logic didn't.
 
 ### 3.1 Per-line ceiling
 
 ```
-lineCeiling = min(tier.maxDiscount, category.maxDiscount)
-lineBreach  = line.discountPercent > lineCeiling
+rule       = getApplicableDiscountRule(customer.tierId, product.categoryId)  // walks the Category tree, §2.4
+lineBreach = line.discountPercent > rule.maxDiscountPercent
 ```
 
-Any single `lineBreach = true` → the quotation requires at least Sales Manager approval, **regardless of order size.** This is the Laptop/Setup-Service example verbatim: a Gold customer, one compliant hardware line, one breaching service line → the whole quote flags.
+Any single `lineBreach = true` → `requiredLevel = MANAGER` at minimum, **regardless of order size.** This is the Laptop/Setup-Service example verbatim: a Gold customer, one compliant hardware line, one breaching service line → the whole quote flags. A missing `DiscountRule` anywhere up the category chain is a thrown business error, never a silent allowance — "no rule" must never read as "no limit."
 
-### 3.2 Blended severity (decides Manager-only vs Manager→Finance)
+### 3.2 Blended severity (decides Manager-only vs Manager+Finance)
 
 A naive value-weighted average **fails the brief's own example** — a large compliant line dilutes a small breaching one to statistical insignificance. Instead, weight by *overage*, not by line value:
 
 ```
-totalOverage = Σ max(0, line.discountPercent - line.lineCeiling) × line.lineTotal
-              for every line
+excessPercent    = max(0, line.discountPercent - rule.maxDiscountPercent)
+weightedOverage  = Σ excessPercent × line.lineTotal     (every line)
+blendedSeverity  = weightedOverage / Σ line.lineTotal   (order-wide)
 
-blendedSeverity = totalOverage / Σ line.lineTotal   (order-wide)
+if blendedSeverity > customer.tier.financeEscalationSeverity:
+    requiredLevel = MANAGER_FINANCE
 ```
 
-Band thresholds (seeded, Admin-editable — placeholder values, tune against real seed data before demo):
-
-| blendedSeverity | Band |
-|---|---|
-| 0 | LOW |
-| 0 < x ≤ 5 | MEDIUM |
-| x > 5 | HIGH |
+No `RiskBand`/`LOW·MEDIUM·HIGH` table — the threshold is `CustomerTier.financeEscalationSeverity` (§2.2/§2.4), one seeded number per tier (Bronze 3, Silver 4, Gold 5, Platinum 6 as currently seeded — tune against real demo numbers before presenting, same caveat as the original placeholder thresholds).
 
 ### 3.3 Order-level compliant-but-heavy check
 
-Reconciles a genuine tension between the brief's prose and the mockup (see below): even when **every line individually complies**, an order whose overall discount is disproportionate to what the tier intends should not sail through silently.
+Reconciles a genuine tension between the brief's prose and the mockup: even when **every line individually complies**, an order whose overall discount is disproportionate to what the tier intends should not sail through silently.
 
 ```
-orderDiscountPercent = 1 - (Σ line.unitPrice × line.qty × (1 - line.discountPercent))
-                              / Σ line.unitPrice × line.qty
+orderDiscountPercent = (1 - netTotal / grossTotal) × 100
 
-if no lineBreach AND orderDiscountPercent > tier.maxDiscount:
-    band = max(band, MEDIUM)   // never silently escalates past MEDIUM on this check alone
+if no lineBreach AND orderDiscountPercent > customer.tier.defaultMaxDiscountPercent:
+    requiredLevel = max(requiredLevel, MANAGER)   // never escalates to MANAGER_FINANCE on this check alone
 ```
 
-**This is a deliberate reconciliation, called out explicitly:** the brief's prose says the blended score exists partly to catch "every line technically within limits while still discounting the order more than the company intends" — but mockup Screen 18 lists "within tier/category limit → no approval needed" without qualification. §3.3 is what makes both texts true at once. If asked, this is the answer: *"we read the two together — full compliance still gets a lightweight order-level check, but can only escalate to MEDIUM, never HIGH, since no line is actually broken."*
+**This is a deliberate reconciliation, called out explicitly:** the brief's prose says the blended score exists partly to catch "every line technically within limits while still discounting the order more than the company intends" — but mockup Screen 18 lists "within tier/category limit → no approval needed" without qualification. §3.3 is what makes both texts true at once. If asked, this is the answer: *"we read the two together — full compliance still gets a lightweight order-level check, but can only escalate to MANAGER, never MANAGER_FINANCE, since no line is actually broken."*
+
+`evaluateDiscount()` returns `approvalRequired`, `approvalLevel` (`NONE`/`MANAGER`/`MANAGER_FINANCE`), and `approvalChain` (`[]` / `['SALES_MANAGER']` / `['SALES_MANAGER','FINANCE']`) — the quotation-submit flow persists `approvalLevel` onto `ApprovalRequest` (§2.6) only when it isn't `NONE`, and generates `ApprovalStep` rows straight from `approvalChain`.
 
 ### 3.4 Margin (separate from risk — do not conflate)
 
@@ -627,30 +700,41 @@ if no lineBreach AND orderDiscountPercent > tier.maxDiscount:
 
 ```
 DRAFT
-  --submit for approval--> PENDING_APPROVAL          (if any trigger in §3 fires)
+  --submit for approval--> PENDING_APPROVAL          (evaluateDiscount() §3 returns approvalRequired)
   --submit, fully compliant--> CONFIRMED              ("Auto Approved", mockup Screen 5)
 
 PENDING_APPROVAL
   --all steps approve--> APPROVED
-  --any step rejects--> REJECTED
-  --any step returns--> DRAFT                          (rep edits and resubmits)
+  --any step rejects--> REJECTED                       (terminal for this row — §1.6)
+  --any step returns--> DRAFT                          (rep edits and resubmits, SAME row)
 
 APPROVED
   --customer opens portal, still just viewing--> APPROVED   (no transition)
+  --customer confirms as-is--> CONFIRMED
+  --customer withdraws--> WITHDRAWN                    (terminal for this row — §1.6)
   --customer submits a counter / rep applies a change--> UNDER_NEGOTIATION
 
 UNDER_NEGOTIATION
+  --customer withdraws--> WITHDRAWN
+  --customer clicks "Confirm Quotation" with current (already-approved) terms--> CONFIRMED
   --rep applies a change that bumps termsVersion--
       --new terms re-evaluated per §3, breach--> PENDING_APPROVAL   (new ApprovalRequest, §1.3)
       --new terms compliant--> CONFIRMED
-  --customer clicks "Confirm Quotation" with current (already-approved) terms--> CONFIRMED
 
 CONFIRMED
   (terminal for the quotation state machine — fulfillment/billing/subscription
    states progress independently from here, see §2.8–2.9)
+
+REJECTED / WITHDRAWN
+  (terminal for THIS ROW, not for the deal — §1.6. A rep opens it and requests
+   a new quotation from inside it, creating a new DRAFT with previousQuotationId
+   pointing back here. Never triggered by the customer; never gated by anything
+   other than the source being REJECTED or WITHDRAWN.)
 ```
 
 **The DRAFT → CONFIRMED auto-approve edge is what "Auto Approved" on mockup Screen 5 means** — no ApprovalRequest row is ever created for a fully-compliant quotation. Don't model auto-approval as an ApprovalRequest that happens to be instantly approved; it's a distinct path with no approval artifact, which is also why it appears green/terminal immediately in the pipeline view.
+
+**`REJECTED` vs `RETURNED` vs `WITHDRAWN`, precisely, since the names are close:** `RETURNED` is an `ApprovalStepStatus` — an approver sends the quotation back for rework, same row, loops to `DRAFT`. `REJECTED` is a `QuotationStatus` — an approver says a final no, new row required to continue. `WITHDRAWN` is also a `QuotationStatus` — the customer says no instead, same "new row required" consequence as `REJECTED`, different actor.
 
 ---
 
@@ -675,7 +759,11 @@ GET/POST/PATCH         /api/internal/inventory
 
 ```
 GET    /api/internal/quotations                    ?status=&repId=&customerId=
-POST   /api/internal/quotations
+POST   /api/internal/quotations                     { customerId, lines }  OR  { sourceQuotationId, lines }
+                                                     — the second form is "Create New Quotation" from inside an
+                                                     existing quotation's screen (§1.6): customerId is inherited,
+                                                     not supplied, and only source status REJECTED/WITHDRAWN
+                                                     may be used (enforced in the service, not the DB)
 GET    /api/internal/quotations/:id
 PATCH  /api/internal/quotations/:id/lines           (add/edit/remove — bumps termsVersion, re-evaluates §3)
 POST   /api/internal/quotations/:id/submit          (DRAFT -> PENDING_APPROVAL | CONFIRMED)
@@ -733,18 +821,23 @@ The last row is the one to enforce carefully: it's a serialization concern (a sh
 
 ## 6a. Reconciliation with the implemented backend (2026-09-05)
 
-This file and the backend were written independently and diverged on four points. Resolved as: **keep what's built and tested, adopt what's new.** Recorded here per ground rule 15 so neither side re-decides these differently later.
+This file and the backend were written independently and diverged repeatedly. Resolved as: **keep what's built and tested, adopt what's new.** Recorded here per ground rule 15 so neither side re-decides these differently later. This table itself went stale once already (it didn't mention the §2.2–2.4 tier/category/discount-rule rework below until this pass caught it) — a reminder that this section needs re-checking against `schema.prisma`, not just trusted, whenever a design conversation is about to build on top of it.
 
 | Point | This file said | Backend actually does | Kept |
 |---|---|---|---|
 | Primary keys | `String @default(cuid())` | `Int @default(autoincrement())` | **Int.** Deliberate, made directly with the product owner: readable in Postman/Studio during a live demo, and IDs are never portal-facing (see §1.2 note below). |
 | Auth routes | `/auth/login`, `/portal/auth/login` | `/api/internal/auth/*`, `/api/portal/*` (portal not yet built) | **`/api/internal/*` / `/api/portal/*`.** Same internal/portal boundary this file requires (§6) — different spelling, not a different design. Enforced by JWT audience, not just the path (a portal token fails signature verification on an internal route, not just a route check). |
-| Product category | `HARDWARE / SERVICE / SUBSCRIPTION` as one enum | `HARDWARE / SOFTWARE / SERVICE` category enum + separate `isSubscribable` boolean | **The backend's split.** This file's version conflates *what a product is* (drives the discount ceiling) with *how it's billed* (drives invoicing). A subscribable software licence would have no category to check a ceiling against under the old enum. The one-time-vs-recurring choice is made per quotation line, not on the product, since the same product can be sold either way to different customers. |
+| Product category | `HARDWARE / SERVICE / SUBSCRIPTION` as one enum | First cut: `HARDWARE / SOFTWARE / SERVICE` enum + `isSubscribable`. **Second cut (`0e38df4`/`ee39862`): a real `Category` tree** (§2.3), plus a separate `ProductType` enum (`GOODS`/`SERVICE`/`COMBO`) for stocking behavior. | **The tree.** An admin manages categories the same way they manage products; a flat enum can't express "Hardware / Computers" governed by a rule written at "Hardware." |
+| Discount ceilings | Two ceiling tables, `min()`'d (`TierDiscountCeiling` × `CategoryDiscountCeiling`) | **`DiscountRule`** — one direct `(tier, category)` lookup, resolved by walking up the category tree (§2.4) | **`DiscountRule`.** One number per real pair beats `min()`-ing two independently-configured numbers, and resolution-by-tree-walk falls out naturally once category is a tree anyway. |
+| Approval routing | `RiskBand` (LOW/MEDIUM/HIGH) + `ApprovalRoutingRule` config table | **`ApprovalLevel`** (`MANAGER`/`MANAGER_FINANCE`), computed directly in `evaluateDiscount()` against `CustomerTier.financeEscalationSeverity` (§2.4, §3.2) | **`ApprovalLevel`.** No band abstraction in between the score and the routing decision — one less config table, same three triggers from §3 preserved. |
+| Customer tier | `enum CustomerTier { BRONZE, SILVER, GOLD }`, assigned | **`CustomerTier` table + a scoring engine** (`tierScoring.service.js`, `TierScoringConfig`) — tier is *calculated* from purchase value, order count, recency, relationship length, not assigned (§2.2). Adds a `PLATINUM` tier beyond the brief's three. | **The scoring engine.** Not asked for by the brief, but already built, tested, and not in conflict with anything this file requires — the discount/approval logic only ever reads `tierId`/`financeEscalationSeverity`/`defaultMaxDiscountPercent`, indifferent to how the tier was arrived at. |
 | Warehouse cost | `shippingCostWeight` (a multiplier) | `shippingCostPerShipment` (₹ per dispatch) + `priority` (tie-break) | **The backend's version.** An absolute cost lets the split score an allocation as `shipments × cost`, so two shipments from a cheap depot can legitimately beat one from an expensive one — the actual point of weighting shipments rather than just counting them. |
 
-**Adopted from this file, unchanged, for everything built from here on:** the `Company` singleton, the `Customer` / `PortalUser` split, `termsVersion` / `approvedTermsVersion` approval-versioning (§1.2), one `ApprovalRequest` per round with its own `ApprovalStep` chain (§1.3), negotiation as propose-then-apply (§1.4), and the three-trigger blended risk formula (§3). Nothing built so far conflicts with any of these — Products, Customers, Warehouses and Inventory (with an added `StockMovement` audit ledger beyond §2.8's `StockLevel`) are additive to this schema, not competing with it.
+**Adopted from this file, unchanged, for everything built from here on:** the `Company` singleton (not yet built), the `Customer` / no-`PortalUser` split, `termsVersion` / `approvedTermsVersion` approval-versioning (§1.2), one `ApprovalRequest` per round with its own `ApprovalStep` chain (§1.3), negotiation as propose-then-apply (§1.4, not yet built), and the three-trigger blended risk logic (§3, now implemented against `DiscountRule`/`ApprovalLevel` instead of the originally-sketched tables). Nothing built so far conflicts with any of these — Quotation/QuotationLine/ApprovalRequest/ApprovalStep/AuditLog/QuoteRequest (§2.5–2.6, §2.10–2.11, built 2026-09-05) are additive to this schema, not competing with it.
 
 `Role` already matched exactly (`ADMIN`, `SALES_REP`, `SALES_MANAGER`, `FINANCE`) — no change needed there.
+
+**Seed-data / demo-narrative note, not yet reconciled:** `server/prisma/seed.js` currently seeds a generic placeholder business (Acme Corp / Beta Industries, a "ProBook 14-inch Laptop" catalog, 4 tiers including `PLATINUM`) built while the discount engine was developed in isolation — not the Netrix Systems / ZKTeco catalog `DEMO_SCENARIO.md` describes (3 tiers, no Platinum). Flagging rather than fixing here — reconciling the seed data to the demo narrative is a separate task from the schema work in this pass, but it needs doing before the demo is rehearsed against real seeded numbers (§3.2's thresholds especially).
 
 ---
 
@@ -753,9 +846,15 @@ This file and the backend were written independently and diverged on four points
 Tracked here so they don't get silently decided twice by two different sessions.
 
 - [x] ~~Portal auth mechanism~~ — **resolved by the built schema**: `Customer.passwordHash`, email + password, no magic link, no separate `PortalUser`. See §2.2.
-- [ ] Exact `blendedSeverity` thresholds (§3.2) — placeholders, tune once seed data (DEMO_SCENARIO.md) is loaded and the demo quote's numbers can be checked by hand.
+- [x] ~~Discount governance schema~~ — **built, differently than originally sketched**: `CustomerTier`/`DiscountRule`/`ApprovalLevel` replace `RiskBand`/`ApprovalRoutingRule`/the two ceiling tables. See §2.4, §3, §6a.
+- [x] ~~Quotation/Approval core schema~~ — **built** (`quotation_lifecycle_core` migration, 2026-09-05). See §2.5–2.6, §2.10.
+- [ ] `evaluateDiscount()` is not yet wired to anything that persists a `Quotation`/`ApprovalRequest` — the service layer/state-machine code (submit, approve/reject/return, confirm, withdraw, requote) is the next slice, not built yet.
+- [ ] `CustomerTier.financeEscalationSeverity` thresholds (currently 3/4/5/6 for Bronze/Silver/Gold/Platinum, §3.2) — seeded placeholders, tune once demo seed data is loaded and the demo quote's numbers can be checked by hand.
+- [ ] **Seed data does not match `DEMO_SCENARIO.md`** — see §6a's seed-data note. Needs reconciling (Netrix/ZKTeco catalog, 3 tiers not 4) before rehearsing the demo.
+- [ ] Feed `Quotation` confirmation into `Customer.totalPurchaseValue`/`completedOrders`/`lastOrderAt` (§2.2) so tier scores become real once orders exist, instead of only reflecting seeded values.
 - [ ] Warehouse split algorithm exact greedy rule — real fields now exist to build it against: `Warehouse.shippingCostPerShipment` + `priority` (§2.8). Largest-coverage-first, remainder to backorder, tie-break on priority.
 - [ ] Proration formula for mid-cycle subscription quantity changes.
+- [ ] Should "Create New Quotation" (§1.6) be blocked while a source is still live (DRAFT/PENDING_APPROVAL/APPROVED/UNDER_NEGOTIATION), or is that already impossible by construction since only REJECTED/WITHDRAWN sources are eligible? Leaning "already impossible, no extra check needed" — confirm when the submit/requote service is written.
 
 ## 8. Pending requirement — customer product/service catalog
 
@@ -772,4 +871,4 @@ Likely both matter, but which one is default/primary is worth a real answer befo
 
 ---
 
-*Last updated against: server/prisma/schema.prisma as of commit `d994df8` (auth + customers/products/warehouses/inventory built), DEMO_SCENARIO.md (Netrix Systems / ZKTeco catalog), DESIGN_SYSTEM.md (light + violet). If you change the demo business or a routing rule, update this file in the same commit.*
+*Last updated against: `server/prisma/schema.prisma` as of migration `20260905151646_quotation_lifecycle_core` (auth + customers/products/warehouses/inventory + tier-scoring/category/discount-rule engine + quotation/approval/audit/quote-request core all built), DEMO_SCENARIO.md (Netrix Systems / ZKTeco catalog — not yet reflected in seed data, §6a/§7), DESIGN_SYSTEM.md (light + violet). If you change the demo business or a routing rule, update this file in the same commit.*

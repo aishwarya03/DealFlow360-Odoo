@@ -44,7 +44,7 @@ model CustomerTier {
   // Finance is added when the order's blended risk score exceeds this. It sits
   // on the tier rather than on each rule because the score is an order-wide
   // figure — no single line's rule can decide it.
-  financeEscalationSeverity Decimal @db.Decimal(5, 2) @default(5)
+  financeEscalationSeverity Decimal @default(5) @db.Decimal(5, 2)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -99,17 +99,17 @@ model DiscountRule {
 model TierScoringConfig {
   id Int @id @default(1)
 
-  purchaseValueWeight Decimal @db.Decimal(5, 2) @default(40)
-  orderCountWeight    Decimal @db.Decimal(5, 2) @default(25)
-  recencyWeight       Decimal @db.Decimal(5, 2) @default(20)
-  relationshipWeight  Decimal @db.Decimal(5, 2) @default(15)
+  purchaseValueWeight Decimal @default(40) @db.Decimal(5, 2)
+  orderCountWeight    Decimal @default(25) @db.Decimal(5, 2)
+  recencyWeight       Decimal @default(20) @db.Decimal(5, 2)
+  relationshipWeight  Decimal @default(15) @db.Decimal(5, 2)
 
-  purchaseValueTarget     Decimal @db.Decimal(14, 2) @default(1250000)
+  purchaseValueTarget     Decimal @default(1250000) @db.Decimal(14, 2)
   orderCountTarget        Int     @default(28)
   // Days since the last order at which recency scores zero; it decays
   // linearly from full marks on the day of the order.
   recencyHorizonDays      Int     @default(80)
-  relationshipTargetYears Decimal @db.Decimal(5, 2) @default(3)
+  relationshipTargetYears Decimal @default(3) @db.Decimal(5, 2)
 
   updatedAt DateTime @updatedAt
 
@@ -126,6 +126,10 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  quotationsOwned   Quotation[]    @relation("QuotationOwner")
+  approvalStepsDone ApprovalStep[]
+  auditEntries      AuditLog[]
 
   @@map("users")
 }
@@ -144,14 +148,14 @@ model Customer {
   tierId Int
   tier   CustomerTier @relation(fields: [tierId], references: [id])
 
-  tierScore        Decimal   @db.Decimal(5, 2) @default(0)
+  tierScore        Decimal   @default(0) @db.Decimal(5, 2)
   tierCalculatedAt DateTime?
 
   // The four raw metrics the tier score is computed from. Stored on the
   // customer because there is no order history in the system yet; once the
   // quotation/order slice lands these become derived figures refreshed from
   // real orders, and the scoring engine itself does not change.
-  totalPurchaseValue Decimal   @db.Decimal(14, 2) @default(0)
+  totalPurchaseValue Decimal   @default(0) @db.Decimal(14, 2)
   completedOrders    Int       @default(0)
   lastOrderAt        DateTime?
   customerSince      DateTime  @default(now())
@@ -161,6 +165,8 @@ model Customer {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  quotations Quotation[]
 
   @@index([tierId])
   @@map("customers")
@@ -189,8 +195,8 @@ enum ProductType {
 // valid, which is what lets "Electronics" hold both sub-categories and
 // products at the same time.
 model Category {
-  id       Int    @id @default(autoincrement())
-  name     String
+  id   Int    @id @default(autoincrement())
+  name String
 
   parentId Int?
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
@@ -232,19 +238,20 @@ model Product {
   // recurring decision is made per quotation line, since the same product can be
   // sold either way to different customers; the line validator rejects a
   // recurring line when this is false.
-  isSubscribable Boolean      @default(false)
+  isSubscribable Boolean @default(false)
 
   // Money is Decimal, never Float: binary floating point cannot represent 0.1
   // exactly, and that error compounds across discounts, tax and proration.
-  listPrice   Decimal         @db.Decimal(12, 2)
-  costPrice   Decimal         @db.Decimal(12, 2)
-  taxRate     Decimal         @db.Decimal(5, 2) @default(0)
+  listPrice Decimal @db.Decimal(12, 2)
+  costPrice Decimal @db.Decimal(12, 2)
+  taxRate   Decimal @default(0) @db.Decimal(5, 2)
 
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  inventory   Inventory[]
+  inventory      Inventory[]
+  quotationLines QuotationLine[]
 
   @@index([categoryId])
   @@map("products")
@@ -254,19 +261,19 @@ model Product {
 // shipments" while respecting cost, so each warehouse carries the two numbers that
 // scoring needs: a fixed cost per dispatch, and a tie-breaking priority.
 model Warehouse {
-  id       Int     @id @default(autoincrement())
-  code     String  @unique
-  name     String
-  city     String?
+  id   Int     @id @default(autoincrement())
+  code String  @unique
+  name String
+  city String?
 
   // Fixed cost of dispatching one shipment from here, whatever it contains.
   // The split algorithm scores an allocation as (shipments x this) so that two
   // shipments from a cheap depot can legitimately beat one from an expensive one.
-  shippingCostPerShipment Decimal @db.Decimal(10, 2) @default(0)
+  shippingCostPerShipment Decimal @default(0) @db.Decimal(10, 2)
 
   // Tie-breaker when cost is equal — lower wins. Lets an admin express "prefer
   // Main unless there is a real reason not to" without inventing a fake cost.
-  priority Int     @default(100)
+  priority Int @default(100)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -289,7 +296,7 @@ model Inventory {
   productId   Int
 
   // Physically present in this warehouse.
-  onHandQty   Int @default(0)
+  onHandQty Int @default(0)
 
   // Already promised to confirmed orders but not yet shipped. Still on the shelf,
   // no longer sellable.
@@ -313,11 +320,11 @@ model Inventory {
 }
 
 enum StockMovementType {
-  RECEIPT     // stock arriving into a warehouse
-  ADJUSTMENT  // correction: stocktake, damage, shrinkage
+  RECEIPT // stock arriving into a warehouse
+  ADJUSTMENT // correction: stocktake, damage, shrinkage
   RESERVATION // committed to a confirmed order
-  RELEASE     // reservation freed, e.g. cancelled order
-  SHIPMENT    // reserved stock physically dispatched
+  RELEASE // reservation freed, e.g. cancelled order
+  SHIPMENT // reserved stock physically dispatched
 }
 
 // An append-only ledger of every change to a stock row. Inventory holds the current
@@ -344,4 +351,236 @@ model StockMovement {
 
   @@index([warehouseId, productId])
   @@map("stock_movements")
+}
+
+// ── Quotations ──────────────────────────────────────────────────────────
+
+// The customer's own request from the public site, before any formal
+// Quotation exists. A rep reviews it and manually creates a Customer +
+// Quotation if it goes anywhere — no automatic conversion, nothing to keep
+// in sync. See docs/SOURCE_OF_TRUTH.md §2.11.
+enum QuoteRequestStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  DISMISSED
+}
+
+model QuoteRequest {
+  id        Int                @id @default(autoincrement())
+  name      String
+  company   String
+  email     String
+  phone     String?
+  message   String?
+  items     Json? // [{ productName, quantity }] — free-text catalog snapshot, not an FK
+  status    QuoteRequestStatus @default(NEW)
+  createdAt DateTime           @default(now())
+
+  quotations Quotation[]
+
+  @@map("quote_requests")
+}
+
+// The quotation IS the order — one row carries status through the whole
+// lifecycle, no separate SalesOrder created on confirmation.
+//
+// REJECTED (an approver said no) and WITHDRAWN (the customer said no) are
+// both terminal for this row, but not for the deal — either is the only
+// status a new child quotation can be requested from (see previousQuotationId
+// on Quotation below). RETURNED, by contrast, loops an ApprovalStep's
+// quotation back to DRAFT on the SAME row — see ApprovalStepStatus.
+enum QuotationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  UNDER_NEGOTIATION
+  CONFIRMED
+  REJECTED
+  WITHDRAWN
+}
+
+// Not on Product — chosen per QuotationLine, since one-time vs recurring is a
+// per-sale decision: the same product can be sold either way to different
+// customers.
+enum RecurringCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Quotation {
+  id Int @id @default(autoincrement())
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ownerId    Int // sales rep
+  owner      User     @relation("QuotationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  status QuotationStatus @default(DRAFT)
+
+  // Approval binds to a VERSION of the terms, not to the quote. Any
+  // pricing-relevant edit bumps termsVersion; an approval is only valid
+  // while approvedTermsVersion === termsVersion — any edit after approval
+  // silently invalidates it, no explicit "unapprove" step needed.
+  termsVersion         Int  @default(1)
+  approvedTermsVersion Int?
+
+  customerReference String? // the customer's own PO / reference number
+  notes             String? // free-text terms, printed on the quote
+
+  // Set once, by the workflow code, on the transition into CONFIRMED.
+  // Denormalized deliberately: period-based revenue reporting needs a plain
+  // indexed column, not a walk through AuditLog for every row.
+  confirmedAt DateTime?
+
+  // Which public lead (if any) started this chain. Copied forward to every
+  // quotation in a chain at creation time — a one-time copy of an immutable
+  // fact, so it never needs to be kept in sync.
+  sourceQuoteRequestId Int?
+  sourceQuoteRequest   QuoteRequest? @relation(fields: [sourceQuoteRequestId], references: [id], onDelete: SetNull)
+
+  // The rejected/withdrawn quotation this one re-quotes, if any. @unique
+  // makes this a strict chain (at most one successor per predecessor), not a
+  // branching tree. Set only when a rep opens an existing quotation and
+  // requests a new one from inside it — never by the customer. Restricting
+  // this to a REJECTED/WITHDRAWN source is enforced by the service layer,
+  // not the database.
+  previousQuotationId Int?       @unique
+  previousQuotation   Quotation? @relation("QuotationSupersession", fields: [previousQuotationId], references: [id], onDelete: SetNull)
+  supersededBy        Quotation? @relation("QuotationSupersession")
+
+  // Curated business signal for the stalled-deal dashboard — bumped only on
+  // real activity (line edit, approval action, negotiation message), unlike
+  // updatedAt below, which is raw DB bookkeeping touched on any write.
+  lastActivityAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  lines            QuotationLine[]
+  approvalRequests ApprovalRequest[]
+  auditLog         AuditLog[]
+
+  @@index([customerId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([status, lastActivityAt])
+  @@index([sourceQuoteRequestId])
+  @@index([confirmedAt])
+  @@map("quotations")
+}
+
+model QuotationLine {
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity Int
+
+  // Snapshotted at add-time and never recomputed live, so an already-approved
+  // quotation can't silently drift when Admin later changes a price, a
+  // discount rule, or a GST rate. The audit trail must reflect what was
+  // actually approved, at the time it was approved.
+  unitPrice       Decimal @db.Decimal(12, 2) // Product.listPrice at add-time
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  ceilingAtEntry  Decimal @db.Decimal(5, 2) // resolved DiscountRule.maxDiscountPercent at add-time
+  taxRateAtEntry  Decimal @db.Decimal(5, 2) // Product.taxRate at add-time
+
+  // Per-line billing mode — Product.isSubscribable gates whether this is
+  // allowed; the actual choice is made here, per sale, since the same
+  // product can be sold one-time to one customer and on a plan to another.
+  isRecurring    Boolean         @default(false)
+  recurringCycle RecurringCycle?
+
+  @@index([quotationId])
+  @@index([productId])
+  @@map("quotation_lines")
+}
+
+// Promoted from the APPROVAL_LEVEL constant in discountEvaluation.service.js
+// now that something persists it. NONE never gets a row here at all — a
+// fully compliant quotation auto-confirms with no ApprovalRequest artifact
+// (see QuotationStatus above).
+enum ApprovalLevel {
+  MANAGER
+  MANAGER_FINANCE
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+}
+
+// Every approval round is a NEW request, never a mutated one — old requests
+// are never edited after they close. Makes post-negotiation re-approval a
+// fresh, independently-auditable round rather than a reset of the first one.
+model ApprovalRequest {
+  id            Int                   @id @default(autoincrement())
+  quotationId   Int
+  quotation     Quotation             @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  termsVersion  Int // snapshot: which version of the quotation this request is judging
+  approvalLevel ApprovalLevel // from discountEvaluation.service.js's evaluateDiscount()
+  status        ApprovalRequestStatus @default(PENDING)
+  createdAt     DateTime              @default(now())
+
+  steps ApprovalStep[]
+
+  @@index([quotationId])
+  @@index([status])
+  @@map("approval_requests")
+}
+
+enum ApprovalStepRole {
+  SALES_MANAGER
+  FINANCE
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  ACTIVE
+  APPROVED
+  REJECTED
+  RETURNED
+}
+
+model ApprovalStep {
+  id                Int                @id @default(autoincrement())
+  approvalRequestId Int
+  approvalRequest   ApprovalRequest    @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  role              ApprovalStepRole
+  sequence          Int // 1 = Sales Manager, 2 = Finance
+  status            ApprovalStepStatus @default(PENDING)
+
+  // Nullable: the step (and its note/timestamp) must survive even if the
+  // acting user's account is later removed — only the attribution clears.
+  actedById Int?
+  actedBy   User?     @relation(fields: [actedById], references: [id], onDelete: SetNull)
+  note      String?
+  actedAt   DateTime?
+
+  @@unique([approvalRequestId, sequence])
+  @@index([role, status])
+  @@map("approval_steps")
+}
+
+// "All approvals, rejections, and edits must be logged with user, timestamp,
+// and reason" — satisfied by construction here, not by inference from other
+// tables. userId is nullable for the same reason as ApprovalStep.actedById:
+// the log entry is the record of truth and must outlive the user account.
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  userId      Int?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String // "APPROVED", "REJECTED", "RETURNED", "WITHDRAWN", "LINE_EDITED", ...
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([quotationId, createdAt])
+  @@map("audit_logs")
 }
