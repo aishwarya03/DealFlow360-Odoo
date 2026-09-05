@@ -51,31 +51,39 @@ Written as Prisma models — this is what goes in `schema.prisma`, not a paraphr
 
 ### 2.1 Identity & company
 
+**§2.1–2.2 are already built** — `server/prisma/schema.prisma`, as of the auth + customer/product/warehouse/inventory slice. What follows is reconciled to match that reality, not the original draft. Two real decisions replace what was proposed here — both adopted, not overridden:
+
+- **All IDs are `Int @default(autoincrement())`**, not `String cuid()`. Applies everywhere below.
+- **No separate `PortalUser` model.** `Customer` carries its own nullable `passwordHash` directly — one login per customer company. The original draft proposed a `PortalUser` per named contact; the brief never asks for multiple logins per customer, so that was solving a problem we don't have. Simpler, and it's what's actually running.
+
 ```
 enum Role {
   ADMIN
+  SALES_REP
   SALES_MANAGER
   FINANCE
-  SALES_REP
-  // Portal users are NOT this enum — see Customer/PortalUser below.
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           Int      @id @default(autoincrement())
+  name         String
   email        String   @unique
   passwordHash String
-  name         String
-  role         Role
-  active       Boolean  @default(true)
+  role         Role     @default(SALES_REP)
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   quotationsOwned   Quotation[]        @relation("QuotationOwner")
   approvalStepsDone ApprovalStep[]
   auditEntries      AuditLog[]
+
+  @@map("users")
 }
 
-/* Singleton. Admin edits the one row; the portal brands from it.
- * No tenantId anywhere else in the schema — see DEMO_SCENARIO.md "Single company, deliberately". */
+/* Not yet built. Singleton. Admin edits the one row; the public site and the
+ * portal brand from it. No tenantId anywhere else in the schema — see
+ * DEMO_SCENARIO.md "Single company, deliberately". */
 model Company {
   id        String  @id @default("singleton")
   name      String  @default("Netrix Systems Pvt Ltd")
@@ -86,7 +94,7 @@ model Company {
 }
 ```
 
-### 2.2 Customers & portal access
+### 2.2 Customers (also the portal login)
 
 ```
 enum CustomerTier {
@@ -95,100 +103,108 @@ enum CustomerTier {
   GOLD
 }
 
+// Authenticates against /api/portal/* only, never internal routes (once that
+// auth endpoint exists — see §7). passwordHash is nullable: a Customer exists
+// as a sales entity the moment a rep creates it, long before it's given
+// portal access.
 model Customer {
-  id      String       @id @default(cuid())
-  name    String
-  tier    CustomerTier
-  gstin   String?
-  billingAddress String?
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String?
+  tier         CustomerTier @default(BRONZE)
+  contactName  String?
+  phone        String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  portalUsers  PortalUser[]
-  quotations   Quotation[]
-}
+  quotations          Quotation[]
+  negotiationMessages NegotiationMessage[]
 
-/* Deliberately separate from User: different auth surface (magic link /
- * email+password per the brief), no internal role, scoped to exactly one Customer. */
-model PortalUser {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  name       String
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  messages NegotiationMessage[]
+  @@map("customers")
 }
 ```
 
 ### 2.3 Catalog
 
+**Already built, and better than the original draft.** That draft made `SUBSCRIPTION` a third product category — meaning a recurring product would need its own discount ceiling, and the brief's worked example only defines Hardware and Service ceilings. The real schema keeps category as *what the product is* (the ceiling lookup) and treats recurring billing as an orthogonal axis: `isSubscribable` here, the actual cycle chosen **per `QuotationLine`**, not fixed on the product — the same product could conceivably be sold one-time to one customer and on a plan to another. Adopted; `DEMO_SCENARIO.md`'s catalog table is updated to match (category = Hardware/Software/Service; "Subscription" items are Software or Service with `isSubscribable = true`).
+
 ```
 enum ProductCategory {
   HARDWARE
+  SOFTWARE
   SERVICE
-  SUBSCRIPTION
 }
 
+model Product {
+  id             Int             @id @default(autoincrement())
+  sku            String          @unique
+  name           String
+  description    String?
+  category       ProductCategory
+  unit           String          @default("unit")
+  isSubscribable Boolean         @default(false)
+  listPrice      Decimal         @db.Decimal(12, 2)
+  costPrice      Decimal         @db.Decimal(12, 2) // margin — see §3.4
+  taxRate        Decimal         @db.Decimal(5, 2)  @default(0)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  inventory        Inventory[]
+  discountCeilings CategoryDiscountCeiling[]
+  quotationLines   QuotationLine[]
+  upsellFrom       UpsellRule[] @relation("UpsellSource")
+  upsellTo         UpsellRule[] @relation("UpsellTarget")
+
+  @@index([category])
+  @@map("products")
+}
+
+// Not on Product — chosen per QuotationLine (see §2.5), since recurring vs
+// one-time is a per-sale decision, not a catalog-fixed one.
 enum RecurringCycle {
   MONTHLY
   QUARTERLY
   YEARLY
 }
 
-model Product {
-  id          String          @id @default(cuid())
-  name        String
-  category    ProductCategory
-  price       Decimal
-  cost        Decimal          // required for margin — see 3.4. Not in the brief's mockup form; add it anyway.
-  gstPercent  Decimal          @default(18)
-  unit        String           @default("unit")
-  description String?
-  active      Boolean          @default(true)
-
-  // Only meaningful when category = SUBSCRIPTION.
-  isRecurring     Boolean         @default(false)
-  recurringCycle  RecurringCycle?
-
-  discountCeilings CategoryDiscountCeiling[]
-  quotationLines   QuotationLine[]
-  stockLevels      StockLevel[]
-  upsellFrom       UpsellRule[] @relation("UpsellSource")
-  upsellTo         UpsellRule[] @relation("UpsellTarget")
-}
-
-/* A2/A6: pairing-based upsell, seeded from historical co-purchase + promotion flags. */
+/* Not yet built. A2/A6: pairing-based upsell, seeded from co-purchase + promotion flags. */
 model UpsellRule {
-  id              String  @id @default(cuid())
-  sourceProductId String
-  targetProductId String
+  id               Int     @id @default(autoincrement())
+  sourceProductId  Int
+  targetProductId  Int
   source Product @relation("UpsellSource", fields: [sourceProductId], references: [id])
   target Product @relation("UpsellTarget", fields: [targetProductId], references: [id])
-  promoted        Boolean @default(false)
+  promoted         Boolean @default(false)
   minMarginPercent Decimal @default(0)
 }
 ```
 
 ### 2.4 Discount governance (A3 / Section 10)
 
+*Not yet built — next slice after auth/customers/products/warehouses.*
+
 ```
 model TierDiscountCeiling {
-  id           String       @id @default(cuid())
-  tier         CustomerTier @unique
-  maxDiscount  Decimal      // percent
+  id          Int          @id @default(autoincrement())
+  tier        CustomerTier @unique
+  maxDiscount Decimal      @db.Decimal(5, 2) // percent
 }
 
 model CategoryDiscountCeiling {
-  id          String          @id @default(cuid())
+  id          Int             @id @default(autoincrement())
   category    ProductCategory @unique
-  maxDiscount Decimal
+  maxDiscount Decimal         @db.Decimal(5, 2)
 }
 
 /* Which band needs which chain. Seeded, editable by Admin (Screen 18). */
 model ApprovalRoutingRule {
-  id        String @id @default(cuid())
-  riskBand  RiskBand @unique
-  requiresManager Boolean @default(false)
-  requiresFinance Boolean @default(false)
+  id              Int      @id @default(autoincrement())
+  riskBand        RiskBand @unique
+  requiresManager Boolean  @default(false)
+  requiresFinance Boolean  @default(false)
 }
 
 enum RiskBand {
@@ -202,6 +218,8 @@ See §3 for how the band is computed — it is **derived at evaluation time**, n
 
 ### 2.5 The quotation
 
+*Not yet built — this is the next real slice of work.*
+
 ```
 enum QuotationStatus {
   DRAFT
@@ -213,11 +231,11 @@ enum QuotationStatus {
 }
 
 model Quotation {
-  id          String          @id @default(cuid())
+  id          Int             @id @default(autoincrement())
   code        String          @unique // "Q-1042"
-  customerId  String
+  customerId  Int
   customer    Customer        @relation(fields: [customerId], references: [id])
-  ownerId     String          // sales rep
+  ownerId     Int             // sales rep
   owner       User            @relation("QuotationOwner", fields: [ownerId], references: [id])
   status      QuotationStatus @default(DRAFT)
 
@@ -227,33 +245,44 @@ model Quotation {
   lastActivityAt DateTime @default(now()) // drives "stalled" on the Deal Health dashboard
   createdAt      DateTime @default(now())
 
-  lines             QuotationLine[]
-  approvalRequests  ApprovalRequest[]
-  negotiationMessages NegotiationMessage[]
-  fulfillmentSplits FulfillmentSplit[]
+  lines                 QuotationLine[]
+  approvalRequests      ApprovalRequest[]
+  negotiationMessages   NegotiationMessage[]
+  fulfillmentSplits     FulfillmentSplit[]
   subscriptionSchedules SubscriptionSchedule[]
-  invoices          Invoice[]
-  auditLog          AuditLog[]
+  invoices              Invoice[]
+  auditLog              AuditLog[]
+
+  @@map("quotations")
 }
 
 model QuotationLine {
-  id           String    @id @default(cuid())
-  quotationId  String
-  quotation    Quotation @relation(fields: [quotationId], references: [id])
-  productId    String
-  product      Product   @relation(fields: [productId], references: [id])
-  quantity     Int
-  unitPrice    Decimal   // snapshot of Product.price at add-time; price list can move independently
-  discountPercent Decimal @default(0)
+  id              Int       @id @default(autoincrement())
+  quotationId     Int
+  quotation       Quotation @relation(fields: [quotationId], references: [id])
+  productId       Int
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Int
+  unitPrice       Decimal   @db.Decimal(12, 2) // snapshot of Product.listPrice at add-time
+  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
 
-  // Denormalized at write-time so history survives a later ceiling change:
-  ceilingAtEntry Decimal
+  // Denormalized at write-time so history survives a later ceiling change.
+  ceilingAtEntry  Decimal   @db.Decimal(5, 2)
+
+  // Per-line billing mode — see §2.3: Product.isSubscribable gates whether
+  // this is allowed, the actual choice is made here, per sale.
+  isRecurring    Boolean         @default(false)
+  recurringCycle RecurringCycle?
+
+  @@map("quotation_lines")
 }
 ```
 
 **Why snapshot `unitPrice` and `ceilingAtEntry` onto the line** rather than always reading live from `Product`/ceiling config: if Admin changes a discount ceiling next week, an already-approved quotation from today must not silently become "over limit" retroactively. The audit trail has to reflect what was actually approved, at the time it was approved.
 
 ### 2.6 Approval
+
+*Not yet built.*
 
 ```
 enum ApprovalRequestStatus {
@@ -264,8 +293,8 @@ enum ApprovalRequestStatus {
 }
 
 model ApprovalRequest {
-  id           String    @id @default(cuid())
-  quotationId  String
+  id           Int       @id @default(autoincrement())
+  quotationId  Int
   quotation    Quotation @relation(fields: [quotationId], references: [id])
   termsVersion Int       // snapshot: which version this request is judging
   riskBand     RiskBand
@@ -289,13 +318,13 @@ enum ApprovalStepStatus {
 }
 
 model ApprovalStep {
-  id                String   @id @default(cuid())
-  approvalRequestId String
+  id                Int      @id @default(autoincrement())
+  approvalRequestId Int
   approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id])
   role              ApprovalStepRole
   sequence          Int      // 1 = Sales Manager, 2 = Finance
   status            ApprovalStepStatus @default(PENDING)
-  actedById         String?
+  actedById         Int?
   actedBy           User?    @relation(fields: [actedById], references: [id])
   note              String?
   actedAt           DateTime?
@@ -303,6 +332,8 @@ model ApprovalStep {
 ```
 
 ### 2.7 Negotiation (portal)
+
+*Not yet built.* References `Customer` directly per §2.2 — no `PortalUser` indirection.
 
 ```
 enum NegotiationMessageType {
@@ -318,45 +349,97 @@ enum NegotiationMessageStatus {
 }
 
 model NegotiationMessage {
-  id            String   @id @default(cuid())
-  quotationId   String
-  quotation     Quotation @relation(fields: [quotationId], references: [id])
-  portalUserId  String
-  portalUser    PortalUser @relation(fields: [portalUserId], references: [id])
-  type          NegotiationMessageType
-  lineId        String?  // set for LINE_COMMENT / a line-scoped counter
-  proposedDiscountPercent Decimal?
-  body          String?
-  status        NegotiationMessageStatus @default(OPEN)
-  createdAt     DateTime @default(now())
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  customerId  Int
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  type        NegotiationMessageType
+  lineId      Int?      // set for LINE_COMMENT / a line-scoped counter
+  proposedDiscountPercent Decimal? @db.Decimal(5, 2)
+  body        String?
+  status      NegotiationMessageStatus @default(OPEN)
+  createdAt   DateTime  @default(now())
 }
 ```
 
 ### 2.8 Fulfillment
 
+**`Warehouse`, `Inventory` and `StockMovement` are already built** — real field names below, replacing this doc's original `StockLevel` guess. Two things worth keeping in mind that the real schema does better than the original draft:
+
+- `Warehouse.shippingCostPerShipment` (fixed cost per dispatch) + `priority` (tie-breaker) — cleaner than a vague "shipping cost weight," and directly usable in the split scoring formula in §7.
+- `StockMovement` is an append-only ledger of every stock change (`RECEIPT`, `ADJUSTMENT`, `RESERVATION`, `RELEASE`, `SHIPMENT`) — `Inventory` holds the current balance, this explains how it got there. Reuse it for "consolidate remaining backorder" rather than inventing a second trail.
+
 ```
 model Warehouse {
-  id       String @id @default(cuid())
-  name     String
-  location String
-  shippingCostWeight Decimal @default(1) // used by the split algorithm, §3.3
+  id   Int    @id @default(autoincrement())
+  code String @unique
+  name String
+  city String?
 
-  stockLevels StockLevel[]
+  shippingCostPerShipment Decimal @db.Decimal(10, 2) @default(0)
+  priority                Int     @default(100) // lower wins on a cost tie
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventory Inventory[]
+  movements StockMovement[]
+
+  @@map("warehouses")
 }
 
-model StockLevel {
-  id          String    @id @default(cuid())
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
-  onHand      Int       @default(0)
-  reserved    Int       @default(0)
-  // available = onHand - reserved, computed, not stored
+// available = onHandQty - reservedQty, always derived, never stored (§1.5).
+model Inventory {
+  id           Int @id @default(autoincrement())
+  warehouseId  Int
+  productId    Int
+  onHandQty    Int @default(0)
+  reservedQty  Int @default(0)
+  reorderPoint Int @default(0)
+  reorderQty   Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
 
   @@unique([warehouseId, productId])
+  @@index([productId])
+  @@map("inventory")
 }
 
+enum StockMovementType {
+  RECEIPT
+  ADJUSTMENT
+  RESERVATION
+  RELEASE
+  SHIPMENT
+}
+
+model StockMovement {
+  id            Int               @id @default(autoincrement())
+  warehouseId   Int
+  productId     Int
+  type          StockMovementType
+  onHandDelta   Int @default(0)
+  reservedDelta Int @default(0)
+  reason        String?
+  userId        Int?
+  createdAt     DateTime @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([warehouseId, productId])
+  @@map("stock_movements")
+}
+```
+
+**Not yet built:**
+
+```
 enum FulfillmentLineStatus {
   RESERVED
   BACKORDERED
@@ -364,19 +447,22 @@ enum FulfillmentLineStatus {
 }
 
 model FulfillmentSplit {
-  id           String    @id @default(cuid())
-  quotationId  String
-  quotation    Quotation @relation(fields: [quotationId], references: [id])
-  warehouseId  String
-  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
-  quotationLineId String
-  quantity     Int
-  status       FulfillmentLineStatus @default(RESERVED)
-  shippedAt    DateTime?
+  id              Int       @id @default(autoincrement())
+  quotationId     Int
+  quotation       Quotation @relation(fields: [quotationId], references: [id])
+  quotationLineId Int
+  warehouseId     Int
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id])
+  productId       Int       // denormalized — the Inventory row this reserves against
+  quantity        Int
+  status          FulfillmentLineStatus @default(RESERVED)
+  shippedAt       DateTime?
 }
 ```
 
 ### 2.9 Billing
+
+*Not yet built.*
 
 ```
 enum InvoiceKind {
@@ -391,11 +477,11 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
-  quotationId String
+  id          Int       @id @default(autoincrement())
+  quotationId Int
   quotation   Quotation @relation(fields: [quotationId], references: [id])
   kind        InvoiceKind
-  amount      Decimal
+  amount      Decimal   @db.Decimal(12, 2)
   status      InvoiceStatus @default(UNPAID)
   dueDate     DateTime
   paidAt      DateTime?
@@ -405,12 +491,12 @@ model Invoice {
 }
 
 model SubscriptionSchedule {
-  id              String   @id @default(cuid())
-  quotationId     String
+  id              Int       @id @default(autoincrement())
+  quotationId     Int
   quotation       Quotation @relation(fields: [quotationId], references: [id])
-  quotationLineId String
+  quotationLineId Int
   cycle           RecurringCycle
-  amount          Decimal
+  amount          Decimal   @db.Decimal(12, 2)
   nextBillDate    DateTime
   status          SubscriptionStatus @default(ACTIVE)
 }
@@ -422,31 +508,66 @@ enum SubscriptionStatus {
 }
 
 model CreditNote {
-  id           String   @id @default(cuid())
-  scheduleId   String
-  schedule     SubscriptionSchedule @relation(fields: [scheduleId], references: [id])
-  amount       Decimal
-  reason       String
-  createdAt    DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  scheduleId Int
+  schedule   SubscriptionSchedule @relation(fields: [scheduleId], references: [id])
+  amount     Decimal  @db.Decimal(12, 2)
+  reason     String
+  createdAt  DateTime @default(now())
 }
 ```
 
 ### 2.10 Audit & deal health
 
+*Not yet built.*
+
 ```
 model AuditLog {
-  id          String   @id @default(cuid())
-  quotationId String
+  id          Int       @id @default(autoincrement())
+  quotationId Int
   quotation   Quotation @relation(fields: [quotationId], references: [id])
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  action      String   // "APPROVED", "REJECTED", "RETURNED", "LINE_EDITED", "COUNTER_APPLIED", ...
+  userId      Int?
+  user        User?     @relation(fields: [userId], references: [id])
+  action      String    // "APPROVED", "REJECTED", "RETURNED", "LINE_EDITED", "COUNTER_APPLIED", ...
   note        String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 }
 ```
 
 **Deal Health / anomaly dashboard is a read model, not a stored entity.** `Stalled` = `lastActivityAt` older than a configured threshold on a non-terminal quotation. `Discount Anomaly` = a confirmed line's discount percent significantly above that rep's historical average for the category. Both are computed queries over existing tables — nothing new to keep in sync.
+
+### 2.11 Public quote requests (leads)
+
+*Not yet built.* Added 2026-09-05 — the public site's "Request a Quote" form submits to this, not to `Quotation`. Deliberately a separate, minimal model: the submitter has no account and isn't a `Customer` yet — forcing the form through `Quotation`/`Customer` creation would mean either an unauthenticated write path into real sales data, or inventing a placeholder Customer for every anonymous enquiry. A rep reviews the lead and manually creates a real `Customer` + `Quotation` if it goes anywhere; no automatic conversion logic, nothing to keep in sync.
+
+Updated 2026-09-05: the public Products page now has a "quote cart" (add multiple products, adjust quantity, review on `/cart`) instead of one free-text field only. `message` stays for context, `items` carries the structured picks:
+
+```
+enum QuoteRequestStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  DISMISSED
+}
+
+model QuoteRequest {
+  id          Int      @id @default(autoincrement())
+  name        String
+  company     String
+  email       String
+  phone       String?
+  message     String?  // now optional — only required client-side when items is empty
+  items       Json?    // [{ productName: string, quantity: number }], structured cart picks
+  status      QuoteRequestStatus @default(NEW)
+  createdAt   DateTime @default(now())
+}
+```
+
+**Why `items: Json?` and not a relational `QuoteRequestLine` table:** nobody queries this beyond a rep reading it by eye (per §5, review is a simple `GET/PATCH` list), and `productName` is a free-text snapshot of the frontend's static catalog, not an FK to a real `Product` — the requester isn't a known customer and the catalog they saw may not even match live `Product` rows yet. A join buys nothing here. If quote-request reporting ever becomes a real feature, this is the field to normalize then, not now.
+
+**API:** `POST /api/public/quote-requests` (no auth — anonymous submission) and `GET/PATCH /api/internal/quote-requests` (staff review — teammate's territory, not built by this session). The public-facing form (this session's scope) calls the `POST` endpoint; until it exists server-side, submission will fail honestly rather than fake a success.
+
+**Backend note (not decided by this session):** the public Products page (client-facing scope) currently renders from a static local catalog (`client/src/data/catalog.js`) with `imageUrl: null` on every item, falling back to a category icon tile. Per-product and per-category image columns are planned on the backend side — once `Product.imageUrl` (and whatever holds category-level images, since `ProductCategory` is currently a plain enum, not a table — see §2.3) exist, swapping the static catalog for a real `GET /api/public/products` fetch is a small, mechanical change on the frontend; the card/cart components already handle both an image and the icon fallback.
 
 ---
 
@@ -533,42 +654,57 @@ CONFIRMED
 
 ---
 
-## 5. API surface (indicative)
+## 5. API surface
 
-Grouped by the screens in the mockup, not by REST purity — this is what the frontend actually calls.
+`/api/internal/*` = staff (JWT from `authenticateInternal`). `/api/portal/*` = customers, once that auth exists. Grouped by mockup screen, not REST purity.
+
+**Already built:**
 
 ```
-POST   /auth/login | /auth/signup                  (internal users)
-POST   /portal/auth/login                           (magic link or email+password, PortalUser)
+POST /api/internal/auth/register        { name, email, password, role }
+POST /api/internal/auth/login           { email, password }
+GET  /api/internal/auth/me
 
-GET    /quotations                    ?status=&repId=&customerId=
-POST   /quotations
-GET    /quotations/:id
-PATCH  /quotations/:id/lines                        (add/edit/remove — bumps termsVersion, re-evaluates §3)
-POST   /quotations/:id/submit                       (DRAFT -> PENDING_APPROVAL | CONFIRMED)
-GET    /quotations/:id/upsell-suggestions
+GET/POST/PATCH/DELETE  /api/internal/customers
+GET/POST/PATCH/DELETE  /api/internal/products
+GET/POST/PATCH/DELETE  /api/internal/warehouses
+GET/POST/PATCH         /api/internal/inventory
+```
 
-GET    /approvals                     ?status=pending
-GET    /approvals/:approvalRequestId
-POST   /approvals/:approvalRequestId/steps/:stepId/act   { action: APPROVE|REJECT|RETURN, note }
+**Not yet built:**
 
-GET    /quotations/:id/fulfillment-suggestion       (computed, not stored — §3-analogous derivation)
-POST   /quotations/:id/fulfillment                  { splits: [...] }   (accept suggested or manual override)
+```
+GET    /api/internal/quotations                    ?status=&repId=&customerId=
+POST   /api/internal/quotations
+GET    /api/internal/quotations/:id
+PATCH  /api/internal/quotations/:id/lines           (add/edit/remove — bumps termsVersion, re-evaluates §3)
+POST   /api/internal/quotations/:id/submit          (DRAFT -> PENDING_APPROVAL | CONFIRMED)
+GET    /api/internal/quotations/:id/upsell-suggestions
 
-GET    /quotations/:id/subscriptions
-POST   /subscriptions/:id/modify | /cancel
+GET    /api/internal/approvals                      ?status=pending
+GET    /api/internal/approvals/:approvalRequestId
+POST   /api/internal/approvals/:approvalRequestId/steps/:stepId/act   { action: APPROVE|REJECT|RETURN, note }
 
-GET    /invoices                      ?status=
-POST   /invoices/:id/payments
+GET    /api/internal/quotations/:id/fulfillment-suggestion   (computed, not stored)
+POST   /api/internal/quotations/:id/fulfillment     { splits: [...] }   (accept suggested or manual override)
 
-GET    /portal/quotations/:id                       (PortalUser-scoped; internal fields stripped — see §6)
-POST   /portal/quotations/:id/messages              (NegotiationMessage — proposal only, §1.4)
-POST   /portal/quotations/:id/confirm
+GET    /api/internal/quotations/:id/subscriptions
+POST   /api/internal/subscriptions/:id/modify | /cancel
 
-GET    /deal-health                                 (stalled / anomaly / slippage — computed, §2.10)
-GET    /reports                       ?period=&repId=&status=&category=
+GET    /api/internal/invoices                       ?status=
+POST   /api/internal/invoices/:id/payments
 
-GET/POST/PATCH  /admin/products | /admin/warehouses | /admin/discount-tiers | /admin/approval-rules | /admin/company
+GET    /api/internal/deal-health                    (stalled / anomaly / slippage — computed, §2.10)
+GET    /api/internal/reports                        ?period=&repId=&status=&category=
+
+GET/POST/PATCH  /api/internal/discount-tiers | /api/internal/approval-rules | /api/internal/company
+
+POST   /api/portal/auth/login                       { email, password }  (Customer, §2.2 — no PortalUser)
+GET    /api/portal/quotations/:id                   (Customer-scoped; internal fields stripped — see §6)
+POST   /api/portal/quotations/:id/messages           (NegotiationMessage — proposal only, §1.4)
+POST   /api/portal/quotations/:id/confirm
+
+GET    /api/portal/catalog                          (product/service list for the logged-in customer — see §8)
 ```
 
 ---
@@ -616,11 +752,24 @@ This file and the backend were written independently and diverged on four points
 
 Tracked here so they don't get silently decided twice by two different sessions.
 
+- [x] ~~Portal auth mechanism~~ — **resolved by the built schema**: `Customer.passwordHash`, email + password, no magic link, no separate `PortalUser`. See §2.2.
 - [ ] Exact `blendedSeverity` thresholds (§3.2) — placeholders, tune once seed data (DEMO_SCENARIO.md) is loaded and the demo quote's numbers can be checked by hand.
-- [ ] Portal auth mechanism — magic link vs email+password (brief allows either; pick one, don't build both).
-- [ ] Warehouse split algorithm exact greedy rule (§2.8 references it; full spec not yet written here — largest-coverage-first, remainder to backorder, per shipping-cost weight).
+- [ ] Warehouse split algorithm exact greedy rule — real fields now exist to build it against: `Warehouse.shippingCostPerShipment` + `priority` (§2.8). Largest-coverage-first, remainder to backorder, tie-break on priority.
 - [ ] Proration formula for mid-cycle subscription quantity changes.
+
+## 8. Pending requirement — customer product/service catalog
+
+Requested by the user 2026-09-05, explicitly queued for **after** auth + the negotiation/portal slice — not being built yet, tracked here so it isn't lost.
+
+*"As a customer I would like to have a product and service list as well."*
+
+Not explicit in the original brief — the brief's portal (B8) is scoped to viewing/negotiating one's own live quotation, not browsing the full catalog. Two candidate surfaces, not yet decided:
+
+- **A public "Solutions" page on Netrix's own site (`/`)** — marketing content, no auth needed, natural home for "what we sell" in general.
+- **An authenticated view inside the customer portal** — "browse what Netrix offers" as a portal feature, separate from "view my current quotation."
+
+Likely both matter, but which one is default/primary is worth a real answer before building, since it changes whether this is public-site work or `/api/portal/catalog` work (added as a placeholder in §5 above). Revisit when this slice starts.
 
 ---
 
-*Last updated against: DEMO_SCENARIO.md (Netrix Systems / ZKTeco catalog), DESIGN_SYSTEM.md (light + violet). If you change the demo business or a routing rule, update this file in the same commit.*
+*Last updated against: server/prisma/schema.prisma as of commit `d994df8` (auth + customers/products/warehouses/inventory built), DEMO_SCENARIO.md (Netrix Systems / ZKTeco catalog), DESIGN_SYSTEM.md (light + violet). If you change the demo business or a routing rule, update this file in the same commit.*

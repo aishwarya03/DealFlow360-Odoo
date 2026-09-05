@@ -7,8 +7,12 @@ import Dashboard from '../pages/app/Dashboard';
 import InventoryPage from '../pages/app/InventoryPage';
 import ProductsPage from '../pages/app/ProductsPage';
 import WarehousesPage from '../pages/app/WarehousesPage';
-import Home from '../pages/Home';
+import About from '../pages/About';
+import Cart from '../pages/Cart';
 import Landing from '../pages/Landing';
+import Products from '../pages/Products';
+import RequestQuote from '../pages/RequestQuote';
+import Home from '../pages/Home';
 import Login from '../pages/Login';
 import NotFound from '../pages/NotFound';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -21,6 +25,9 @@ import ProtectedRoute from '../components/ProtectedRoute';
  * is handled by AppShell only rendering the nav items a role can reach
  * (client/src/lib/roles.js). That's a UX convenience only; the real
  * enforcement is server-side on every request (see docs/API.html).
+ * No global Layout: the public site, the internal AppShell (teammate's
+ * scope) and the customer PortalShell each need different chrome, so layout
+ * is chosen per route/page instead.
  */
 const AppRoutes = () => {
   return (
@@ -28,6 +35,10 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/request-quote" element={<RequestQuote />} />
 
         {/* Backend connectivity check, kept out of the way. */}
         <Route path="/dev/ping" element={<Home />} />
