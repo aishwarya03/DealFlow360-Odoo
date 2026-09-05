@@ -141,7 +141,13 @@ const ProductRecommendationsPanel = ({ productId }) => {
         </div>
 
         <div className="col-span-1">
-          <Button type="button" size="sm" variant="secondary" disabled={isSaving} onClick={addRecommendation}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={isSaving || !targetId}
+            onClick={addRecommendation}
+          >
             <Plus className="size-4" aria-hidden="true" />
           </Button>
         </div>

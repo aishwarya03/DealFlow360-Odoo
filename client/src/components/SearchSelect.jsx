@@ -40,6 +40,7 @@ const SearchSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [resultsQuery, setResultsQuery] = useState(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debouncedQuery = useDebouncedValue(query, 250);
   const isSearching = isOpen && resultsQuery !== debouncedQuery;
 
@@ -56,6 +57,7 @@ const SearchSelect = ({
         if (cancelled) return;
         setOptions(results);
         setResultsQuery(debouncedQuery);
+        setHighlightedIndex(results.length > 0 ? 0 : -1);
       })
       .catch(() => {
         if (cancelled) return;
@@ -76,6 +78,7 @@ const SearchSelect = ({
     setQuery(displayValue ?? '');
     setOptions([]);
     setResultsQuery(null);
+    setHighlightedIndex(-1);
     setIsOpen(true);
     event.target.select();
   };
@@ -83,6 +86,16 @@ const SearchSelect = ({
   const choose = (option) => {
     setIsOpen(false);
     onSelect(option);
+  };
+
+  // Typing a name and hitting Enter (or tabbing away) without clicking a
+  // row looked like a valid selection — the box still showed the typed
+  // text — but no onSelect ever fired, so the parent's id stayed empty.
+  // Committing to whatever is highlighted closes that gap.
+  const commitHighlighted = () => {
+    const option = options[highlightedIndex];
+    if (option) choose(option);
+    else setIsOpen(false);
   };
 
   return (
@@ -96,8 +109,28 @@ const SearchSelect = ({
         placeholder={placeholder}
         onFocus={openDropdown}
         onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => event.key === 'Escape' && setIsOpen(false)}
-        onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setIsOpen(false);
+          else if (event.key === 'Enter') {
+            event.preventDefault();
+            commitHighlighted();
+          } else if (event.key === 'ArrowDown' && options.length > 0) {
+            event.preventDefault();
+            setHighlightedIndex((index) => (index + 1) % options.length);
+          } else if (event.key === 'ArrowUp' && options.length > 0) {
+            event.preventDefault();
+            setHighlightedIndex((index) => (index - 1 + options.length) % options.length);
+          }
+        }}
+        onBlur={() =>
+          setTimeout(() => {
+            // Only auto-commit if they actually typed something new — an
+            // untouched field (focused then tabbed straight past) must not
+            // silently overwrite an existing selection with result #1.
+            if (query !== (displayValue ?? '')) commitHighlighted();
+            else setIsOpen(false);
+          }, 150)
+        }
         className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 pr-7 text-sm text-slate-900 outline-none transition-colors focus:border-brand-600 disabled:bg-slate-50 disabled:text-slate-400"
       />
       <ChevronDown
@@ -114,14 +147,16 @@ const SearchSelect = ({
           {!isSearching && options.length === 0 && (
             <p className="px-3 py-1.5 text-xs text-slate-400">No matches</p>
           )}
-          {!isSearching && options.map((option) => (
+          {!isSearching && options.map((option, index) => (
             <button
               key={option.value}
               type="button"
               onClick={() => choose(option)}
+              onMouseEnter={() => setHighlightedIndex(index)}
               className={cn(
                 'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-50',
-                String(option.value) === String(value) && 'bg-brand-50 text-brand-700'
+                (index === highlightedIndex || String(option.value) === String(value)) &&
+                  'bg-brand-50 text-brand-700'
               )}
             >
               <span className="truncate">{option.label}</span>
