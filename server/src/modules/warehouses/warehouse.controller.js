@@ -2,7 +2,7 @@ import { sendSuccess } from '../../utils/apiResponse.js';
 import * as warehouseService from './warehouse.service.js';
 
 export const list = async (req, res) => {
-  const warehouses = await warehouseService.listWarehouses(req.query);
+  const warehouses = await warehouseService.listWarehouses(req.validatedQuery);
 
   sendSuccess(res, 'Warehouses', { warehouses, count: warehouses.length });
 };

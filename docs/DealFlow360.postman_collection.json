@@ -14,7 +14,8 @@
     { "key": "role", "value": "", "type": "string" },
     { "key": "productId", "value": "1", "type": "string" },
     { "key": "customerId", "value": "1", "type": "string" },
-    { "key": "warehouseId", "value": "1", "type": "string" }
+    { "key": "warehouseId", "value": "1", "type": "string" },
+    { "key": "categoryId", "value": "1", "type": "string" }
   ],
   "item": [
     {
@@ -182,6 +183,134 @@
       ]
     },
     {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List categories (flat, with path)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories"]
+            },
+            "description": "Each row carries a breadcrumb 'path', e.g. \"Hardware / Computers\"."
+          }
+        },
+        {
+          "name": "List categories (tree)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories/tree",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories", "tree"]
+            },
+            "description": "Same data, nested under a children[] array per root category."
+          }
+        },
+        {
+          "name": "Get one category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories", "{{categoryId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create category (ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('categoryId', body.data.category.id);",
+                  "    console.log('categoryId set to ' + body.data.category.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Accessories\",\n  \"parentId\": 1,\n  \"discountCeiling\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories"]
+            },
+            "description": "Admin only. parentId is optional — omit for a root category. Name only has to be unique among siblings."
+          }
+        },
+        {
+          "name": "Create category — duplicate sibling (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Hardware\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories"]
+            },
+            "description": "\"Hardware\" already exists as a root category."
+          }
+        },
+        {
+          "name": "Update category",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"discountCeiling\": 12\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories", "{{categoryId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete category — blocked, has products/children (400)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories", "1"]
+            },
+            "description": "Category 1 (Hardware) has a child category — deletion is refused, naming why."
+          }
+        },
+        {
+          "name": "Delete category",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "categories", "{{categoryId}}"]
+            },
+            "description": "Deletes the category created above, if it has no products or children — a good one to run last."
+          }
+        }
+      ]
+    },
+    {
       "name": "Products",
       "item": [
         {
@@ -198,17 +327,31 @@
           }
         },
         {
-          "name": "List — filter by category",
+          "name": "List — filter by category (includes descendants)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/internal/products?category=SERVICE",
+              "raw": "{{baseUrl}}/api/internal/products?categoryId=1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "internal", "products"],
-              "query": [{ "key": "category", "value": "SERVICE" }]
+              "query": [{ "key": "categoryId", "value": "1" }]
             },
-            "description": "HARDWARE | SOFTWARE | SERVICE. Anything else returns 422."
+            "description": "categoryId=1 is the Hardware root — this also returns products filed under its child 'Computers', not just products attached directly to Hardware."
+          }
+        },
+        {
+          "name": "List — filter by product type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products?productType=SERVICE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"],
+              "query": [{ "key": "productType", "value": "SERVICE" }]
+            },
+            "description": "GOODS | SERVICE | COMBO. Anything else returns 422."
           }
         },
         {
@@ -287,7 +430,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"HW-MONITOR-27\",\n  \"name\": \"27\\\" 4K Monitor\",\n  \"description\": \"Colour-accurate desktop display\",\n  \"category\": \"HARDWARE\",\n  \"unit\": \"unit\",\n  \"isSubscribable\": false,\n  \"listPrice\": 32000,\n  \"costPrice\": 21000,\n  \"taxRate\": 18\n}"
+              "raw": "{\n  \"sku\": \"HW-MONITOR-27\",\n  \"name\": \"27\\\" 4K Monitor\",\n  \"description\": \"Colour-accurate desktop display\",\n  \"productType\": \"GOODS\",\n  \"categoryId\": {{categoryId}},\n  \"unit\": \"unit\",\n  \"isSubscribable\": false,\n  \"listPrice\": 32000,\n  \"costPrice\": 21000,\n  \"taxRate\": 18\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/internal/products",
@@ -304,7 +447,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"BAD-MARGIN\",\n  \"name\": \"Loss Maker\",\n  \"category\": \"HARDWARE\",\n  \"listPrice\": 100,\n  \"costPrice\": 500\n}"
+              "raw": "{\n  \"sku\": \"BAD-MARGIN\",\n  \"name\": \"Loss Maker\",\n  \"categoryId\": {{categoryId}},\n  \"listPrice\": 100,\n  \"costPrice\": 500\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/internal/products",
@@ -312,6 +455,23 @@
               "path": ["api", "internal", "products"]
             },
             "description": "Selling below cost is rejected, so no quotation can be built on a product with negative margin at list price."
+          }
+        },
+        {
+          "name": "Create product — bad categoryId (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"BAD-CAT\",\n  \"name\": \"Nope\",\n  \"categoryId\": 999999,\n  \"listPrice\": 100,\n  \"costPrice\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"]
+            },
+            "description": "categoryId must reference a category that actually exists."
           }
         },
         {
@@ -326,6 +486,25 @@
               "path": ["api", "internal", "products", "{{productId}}"]
             },
             "description": "Partial update. marginPercent is recomputed in the response. An empty body returns 422."
+          }
+        },
+        {
+          "name": "Upload product image (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products/{{productId}}/image",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products", "{{productId}}", "image"]
+            },
+            "description": "Pick a JPEG/PNG/WebP under 5MB in the 'image' file field. Saves to server/uploads/products/ and sets imageUrl on the product. Uploading again replaces the file — the old one is deleted from disk."
           }
         },
         {

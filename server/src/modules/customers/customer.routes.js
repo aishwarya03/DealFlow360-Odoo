@@ -20,6 +20,14 @@ router.use(authenticateInternal);
 
 router.get('/', validateQuery(listCustomersSchema), customerController.list);
 router.get('/:id', parseId(), customerController.getOne);
+router.get('/:id/tier-score', parseId(), customerController.tierScore);
+
+router.post(
+  '/:id/recalculate-tier',
+  authorize('ADMIN', 'SALES_MANAGER'),
+  parseId(),
+  customerController.recalculateTier
+);
 
 router.post(
   '/',

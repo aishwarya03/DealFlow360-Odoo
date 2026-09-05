@@ -47,6 +47,10 @@ const assertWarehouseAndProduct = async (warehouseId, productId) => {
     throw ApiError.badRequest(`Warehouse ${warehouse.code} is deactivated`);
   }
 
+  if (product.productType === 'SERVICE') {
+    throw ApiError.badRequest(`${product.sku} is a service — services are not stocked`);
+  }
+
   return { warehouse, product };
 };
 

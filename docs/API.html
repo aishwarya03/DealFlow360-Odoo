@@ -476,7 +476,11 @@
     <a href="#admin-only">Role gate probe</a>
     <div class="rail__group">Catalog</div>
     <a href="#products">Products</a>
+    <a href="#categories">Categories</a>
     <a href="#customers">Customers</a>
+    <div class="rail__group">Pricing policy</div>
+    <a href="#tiers">Customer tiers</a>
+    <a href="#discounts">Discount rules</a>
     <div class="rail__group">Stock</div>
     <a href="#warehouses">Warehouses</a>
     <a href="#inventory">Inventory</a>
@@ -503,7 +507,7 @@
         <div class="fact"><dt>Base URL</dt><dd>http://localhost:3000</dd></div>
         <div class="fact"><dt>Auth</dt><dd>Bearer JWT</dd></div>
         <div class="fact"><dt>Format</dt><dd>application/json</dd></div>
-        <div class="fact"><dt>Implemented</dt><dd>25 endpoints</dd></div>
+        <div class="fact"><dt>Implemented</dt><dd>44 endpoints</dd></div>
       </dl>
     </header>
 
@@ -841,12 +845,15 @@
       <div class="note">
         <div class="note__title">Two independent axes</div>
         <p>
-          <code>category</code> says what a product <em>is</em> and drives its discount
-          ceiling. <code>isSubscribable</code> says whether it <em>may</em> be sold on a
-          recurring plan. A software licence has both; collapsing them into one enum would
-          leave a recurring product with no ceiling for the risk engine to check. The
-          one-time vs recurring choice itself is made per quotation line, since the same
-          product can be sold either way to different customers.
+          <code>productType</code> says what a product <em>is made of</em> —
+          <code>GOODS</code> (stocked, physical), <code>SERVICE</code> (labor, never
+          stocked), or <code>COMBO</code> (a bundle — accepted for the field, composition
+          isn't built yet). <code>category</code> says <em>where it sits in the catalog</em>
+          and is what a discount ceiling is configured against — see
+          <a href="#categories">Categories</a> below. <code>isSubscribable</code> is a third,
+          separate axis: whether the product <em>may</em> be sold on a recurring plan. All
+          three are independent — a <code>SERVICE</code> in the "Software" category can still
+          be subscribable, for instance.
         </p>
       </div>
 
@@ -857,13 +864,14 @@
           <span class="tag tag--auth">Any staff</span>
         </div>
         <div class="endpoint__body">
-          <p>Returns active products, ordered by category then name.</p>
+          <p>Returns active products, ordered by name.</p>
 
           <div class="table-wrap">
             <table>
               <thead><tr><th>Query param</th><th>Values</th><th>Effect</th></tr></thead>
               <tbody>
-                <tr><td class="mono">category</td><td class="mono">HARDWARE · SOFTWARE · SERVICE</td><td>Filter by category</td></tr>
+                <tr><td class="mono">categoryId</td><td>integer</td><td>Filter by category — also matches every descendant of that category</td></tr>
+                <tr><td class="mono">productType</td><td class="mono">GOODS · SERVICE · COMBO</td><td>Filter by type</td></tr>
                 <tr><td class="mono">isSubscribable</td><td class="mono">true · false</td><td>Only products sellable on a plan</td></tr>
                 <tr><td class="mono">search</td><td>any text</td><td>Case-insensitive match on name or SKU</td></tr>
                 <tr><td class="mono">includeInactive</td><td class="mono">true · false</td><td>Include deactivated products</td></tr>
@@ -886,8 +894,10 @@
         "sku": "HW-BAG-01",
         "name": "Laptop Carry Case",
         "description": "Padded 14\" case",
-        "category": "HARDWARE",
+        "productType": "GOODS",
+        "category": { "id": 2, "name": "Computers", "parentId": 1, "path": "Hardware / Computers" },
         "unit": "unit",
+        "imageUrl": null,
         "isSubscribable": false,
         "listPrice": 2500,
         "costPrice": 1200,
@@ -907,6 +917,8 @@
             <code>marginPercent</code> is computed server-side as
             <code>(listPrice − costPrice) / listPrice × 100</code>. Don't recompute it in the
             frontend — one formula, one place, so every screen shows the same figure.
+            <code>category.path</code> is a breadcrumb built server-side too — one parent hop
+            deep, matching how shallow the tree is expected to stay.
           </p>
 
           <div class="note">
@@ -950,7 +962,8 @@
   "sku": "HW-MONITOR-27",
   "name": "27\" 4K Monitor",
   "description": "Colour-accurate desktop display",
-  "category": "HARDWARE",
+  "productType": "GOODS",
+  "categoryId": 2,
   "unit": "unit",
   "isSubscribable": false,
   "listPrice": 32000,
@@ -966,8 +979,10 @@
                 <tr><td class="mono">sku</td><td>string</td><td>Required, 2–40 chars, unique, uppercased automatically</td></tr>
                 <tr><td class="mono">name</td><td>string</td><td>Required, min 2 chars</td></tr>
                 <tr><td class="mono">description</td><td>string</td><td>Optional, max 1000 chars</td></tr>
-                <tr><td class="mono">category</td><td>enum</td><td>Required</td></tr>
+                <tr><td class="mono">productType</td><td>enum</td><td>Optional, defaults to <code>GOODS</code></td></tr>
+                <tr><td class="mono">categoryId</td><td>integer</td><td>Required, must reference an existing category</td></tr>
                 <tr><td class="mono">unit</td><td>string</td><td>Optional, defaults to <code>unit</code></td></tr>
+                <tr><td class="mono">imageUrl</td><td>string</td><td>Optional — normally set via the upload endpoint below instead</td></tr>
                 <tr><td class="mono">isSubscribable</td><td>boolean</td><td>Optional, defaults to <code>false</code></td></tr>
                 <tr><td class="mono">listPrice</td><td>number</td><td>Required, ≥ 0</td></tr>
                 <tr><td class="mono">costPrice</td><td>number</td><td>Required, ≥ 0, <strong>must not exceed listPrice</strong></td></tr>
@@ -979,6 +994,7 @@
           <p>
             Errors: <span class="status status--warn">403</span> not an admin ·
             <span class="status status--warn">409</span> SKU in use ·
+            <span class="status status--warn">400</span> <code>categoryId</code> doesn't exist ·
             <span class="status status--warn">422</span> validation failed, including cost
             above list — selling below cost is a margin error, so no quotation can ever be
             built on a product with negative margin at list price.
@@ -1008,6 +1024,40 @@
 
       <div class="endpoint">
         <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/products/:id/image</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            <code>multipart/form-data</code> with a single field named <code>image</code>.
+            Saves the file to <code>server/uploads/products/</code> under a random UUID
+            filename and sets <code>Product.imageUrl</code> to the resulting path (e.g.
+            <code>/uploads/products/8f2c…3e1.png</code>), which is then served statically —
+            <code>GET {{baseUrl}}/uploads/products/8f2c…3e1.png</code> returns the image
+            directly, no auth required, the same tradeoff a public CDN makes.
+          </p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>When</th></tr></thead>
+              <tbody>
+                <tr><td><span class="status status--warn">400</span></td><td>No file, wrong field name, not JPEG/PNG/WebP, or over 5MB</td></tr>
+                <tr><td><span class="status status--warn">403</span></td><td>Not an admin</td></tr>
+                <tr><td><span class="status status--warn">404</span></td><td>Product doesn't exist</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            Uploading again replaces the image: the previous file is deleted from disk once
+            the new one is saved, so re-uploads don't accumulate orphaned files.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
           <span class="method method--delete">DELETE</span>
           <span class="endpoint__path">/api/internal/products/:id</span>
           <span class="tag tag--auth">ADMIN</span>
@@ -1024,6 +1074,318 @@
           </p>
         </div>
       </div>
+    </section>
+
+    <section id="categories">
+      <h2>Categories <a class="anchor" href="#categories">#</a></h2>
+      <p class="section-intro">
+        A real tree, not a fixed list — an admin creates categories the same way they create
+        products. This is the unit discount ceilings are configured against (brief §A3):
+        Hardware can allow 15% discretion while Service allows only 10%, and a product filed
+        under either inherits the check.
+      </p>
+
+      <div class="note">
+        <div class="note__title">A category can hold children, products, or both</div>
+        <p>
+          <code>parentId</code> is nullable and self-referencing. "Hardware" can have a child
+          category "Computers" that products attach to, while "Software" holds products
+          directly at the root with no children at all — both are valid, which is what lets a
+          category like "Electronics" contain sub-categories <em>and</em> products at the same
+          time. Filtering products by a parent category (see <code>categoryId</code> above)
+          walks the whole subtree, so filtering by "Hardware" also returns everything filed
+          under "Hardware / Computers".
+        </p>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/categories</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>Flat list, each row carrying its own breadcrumb <code>path</code>. Filter with <code>search</code>.</p>
+
+          <div class="code">
+            <div class="code__label">200 OK</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Categories",
+  "data": {
+    "categories": [
+      {
+        "id": 2,
+        "name": "Computers",
+        "parentId": 1,
+        "discountCeiling": null,
+        "productCount": 3,
+        "childCount": 0,
+        "path": "Hardware / Computers"
+      }
+    ],
+    "count": 4
+  }
+}</code></pre>
+          </div>
+
+          <p>
+            <code>discountCeiling</code> is a percent, admin-set, not yet consumed by any
+            engine — the discount risk feature will read it once built (see
+            <a href="./SOURCE_OF_TRUTH.md">SOURCE_OF_TRUTH.md §3</a>). <code>null</code> is
+            intended to mean "inherit from the nearest ancestor that defines one."
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/categories/tree</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Same data, nested: each root category carries a <code>children</code> array. Built
+            for a tree-view picker; use the flat list above for a plain dropdown.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/categories</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "name": "Computers",
+  "parentId": 1,
+  "discountCeiling": null
+}</code></pre>
+          </div>
+          <p>
+            <code>name</code> only has to be unique among siblings — "Accessories" can exist
+            under both "Hardware" and "Software" without colliding.
+            Errors: <span class="status status--warn">400</span> <code>parentId</code> doesn't
+            exist · <span class="status status--warn">409</span> a category with that name
+            already exists at the same level.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--patch">PATCH</span>
+          <span class="endpoint__path">/api/internal/categories/:id</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Partial update, including re-parenting. Moving a category under its own
+            descendant is rejected with <span class="status status--warn">400</span> — the
+            tree can never become a cycle.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--delete">DELETE</span>
+          <span class="endpoint__path">/api/internal/categories/:id</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            <strong>Hard delete</strong> — unlike products, customers and warehouses, an
+            unused category carries no history worth preserving. Blocked with
+            <span class="status status--warn">400</span> if it still has child categories or
+            products attached, naming the count, so deleting a category can never silently
+            orphan something that pointed at it.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tiers">
+      <h2>Customer tiers <a class="anchor" href="#tiers">#</a></h2>
+      <p class="section-intro">
+        Tiers are rows, not an enum, and a customer's tier is <strong>calculated</strong> from
+        their trading history — never assigned by hand.
+      </p>
+
+      <div class="code">
+        <div class="code__label">The flow</div>
+<pre><code>Customer metrics  ->  Scoring engine  ->  Tier  ->  Discount rule  ->  Approval routing</code></pre>
+      </div>
+
+      <h3>Scoring</h3>
+      <p>Four weighted metrics produce a score out of 100. Weights and targets are configuration.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Weight</th><th>Full marks at</th></tr></thead>
+          <tbody>
+            <tr><td>Total purchase value</td><td class="num">40</td><td class="num">₹12,50,000</td></tr>
+            <tr><td>Completed orders</td><td class="num">25</td><td class="num">28</td></tr>
+            <tr><td>Recent purchase activity</td><td class="num">20</td><td>ordered today; decays to 0 at 80 days</td></tr>
+            <tr><td>Customer relationship duration</td><td class="num">15</td><td class="num">3 years</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Score</th><th>Tier</th><th>Tier ceiling</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">0–39</td><td>Bronze</td><td class="num">5%</td></tr>
+            <tr><td class="mono">40–59</td><td>Silver</td><td class="num">10%</td></tr>
+            <tr><td class="mono">60–79</td><td>Gold</td><td class="num">15%</td></tr>
+            <tr><td class="mono">80–100</td><td>Platinum</td><td class="num">20%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <div class="note__title">Worked example — seeded, reproducible</div>
+        <p>
+          Acme Corp: ₹12,00,000 spend, 24 orders, last order 12 days ago, customer 2.5 years.
+          Scores <strong>38.4 + 21.43 + 17 + 12.5 = 89.33</strong> → <strong>PLATINUM</strong>,
+          which then resolves a 20% Hardware ceiling instead of Gold's 15%.
+        </p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Route</th><th>Method</th><th>Who</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">/api/internal/tiers</td><td class="mono">GET</td><td>Any staff</td><td>Tiers with their bands and ceilings</td></tr>
+            <tr><td class="mono">/api/internal/tiers</td><td class="mono">POST</td><td>ADMIN</td><td>Add a tier (band + ceiling are data)</td></tr>
+            <tr><td class="mono">/api/internal/tiers/:id</td><td class="mono">PATCH</td><td>ADMIN</td><td>Change a band or ceiling</td></tr>
+            <tr><td class="mono">/api/internal/tiers/scoring-config</td><td class="mono">GET</td><td>Any staff</td><td>Current weights and targets</td></tr>
+            <tr><td class="mono">/api/internal/tiers/scoring-config</td><td class="mono">PATCH</td><td>ADMIN</td><td>Retune weights — must total 100</td></tr>
+            <tr><td class="mono">/api/internal/tiers/recalculate</td><td class="mono">POST</td><td>ADMIN</td><td>Re-score every customer</td></tr>
+            <tr><td class="mono">/api/internal/customers/:id/tier-score</td><td class="mono">GET</td><td>Any staff</td><td>Per-metric breakdown, no write</td></tr>
+            <tr><td class="mono">/api/internal/customers/:id/recalculate-tier</td><td class="mono">POST</td><td>ADMIN · MANAGER</td><td>Re-score one customer</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Metrics live on the customer (<code>totalPurchaseValue</code>,
+        <code>completedOrders</code>, <code>lastOrderAt</code>, <code>customerSince</code>) and
+        can be set through customer create/update. They become derived from real orders once
+        the quotation slice lands; the scoring engine itself does not change. Editing any
+        metric re-scores that customer automatically.
+      </p>
+    </section>
+
+    <section id="discounts">
+      <h2>Discount rules <a class="anchor" href="#discounts">#</a></h2>
+      <p class="section-intro">
+        One configured ceiling per <strong>tier × category</strong>. No percentage is
+        hardcoded anywhere in application code.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Hardware</th><th>Software</th><th>Service</th></tr></thead>
+          <tbody>
+            <tr><td>Platinum</td><td class="num">20%</td><td class="num">20%</td><td class="num">15%</td></tr>
+            <tr><td>Gold</td><td class="num">15%</td><td class="num">15%</td><td class="num">10%</td></tr>
+            <tr><td>Silver</td><td class="num">10%</td><td class="num">10%</td><td class="num">7%</td></tr>
+            <tr><td>Bronze</td><td class="num">5%</td><td class="num">5%</td><td class="num">3%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Resolution</h3>
+      <p>
+        <code>GET /api/internal/discounts/resolve?customerTierId=&amp;categoryId=</code> returns
+        the governing rule. Categories are a tree, so resolution walks <em>up</em> from the
+        product's own category — a product filed under "Hardware / Computers" is governed by
+        the "Hardware" rule, and the response flags <code>inherited: true</code>.
+      </p>
+      <p>
+        If nothing matches anywhere up the chain it returns
+        <span class="status status--warn">400</span> naming the tier, the category and the
+        chain it checked. A missing rule is never a silent allowance.
+      </p>
+
+      <h3>Approval routing</h3>
+      <div class="code">
+        <div class="code__label">The rule</div>
+<pre><code>discount &lt;= maxDiscountPercent            ->  no approval
+discount &gt;  maxDiscountPercent            ->  Sales Manager
+blended risk &gt; financeEscalationSeverity  ->  Sales Manager, then Finance</code></pre>
+      </div>
+
+      <p>
+        The blended risk score is each line's overage weighted by line value, spread across the
+        order — it is what catches many small breaches that no single line makes look alarming.
+        The Finance trigger sits on the tier, because the score is an order-wide figure no
+        single line's rule can decide.
+      </p>
+
+      <div class="note">
+        <div class="note__title">Worked example — the brief's own</div>
+        <p>
+          Acme, laptop at 12% (Hardware allows 15% → fine) plus setup service at 18% (Service
+          allows 10% → over by 8). One line breaks its own stricter ceiling, so the whole
+          quotation routes to a Sales Manager. Blended risk = 8 × 20,000 ÷ 120,000 =
+          <strong>1.33</strong>, below the Finance trigger, so Finance is not pulled in.
+        </p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Route</th><th>Method</th><th>Who</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">/api/internal/discounts/rules</td><td class="mono">GET</td><td>Any staff</td><td>All configured ceilings</td></tr>
+            <tr><td class="mono">/api/internal/discounts/rules</td><td class="mono">POST</td><td>ADMIN</td><td>Add a rule</td></tr>
+            <tr><td class="mono">/api/internal/discounts/rules/:id</td><td class="mono">PATCH</td><td>ADMIN</td><td>Change a ceiling</td></tr>
+            <tr><td class="mono">/api/internal/discounts/rules/:id</td><td class="mono">DELETE</td><td>ADMIN</td><td>Deactivate a rule</td></tr>
+            <tr><td class="mono">/api/internal/discounts/resolve</td><td class="mono">GET</td><td>Any staff</td><td>Which rule governs tier + category</td></tr>
+            <tr><td class="mono">/api/internal/discounts/evaluate</td><td class="mono">POST</td><td>Any staff</td><td>Score draft lines, return approval decision</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code">
+        <div class="code__label">POST /discounts/evaluate — request</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "customerId": 1,
+  "lines": [
+    { "productId": 1, "quantity": 1, "discountPercent": 12 },
+    { "productId": 6, "quantity": 1, "discountPercent": 18 }
+  ]
+}</code></pre>
+      </div>
+
+      <div class="code">
+        <div class="code__label">Response — trimmed</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "approvalRequired": true,
+  "approvalLevel": "MANAGER",
+  "approvalChain": ["SALES_MANAGER"],
+  "totals": { "grossTotal": 120000, "netTotal": 104400, "orderDiscountPercent": 13 },
+  "risk": { "blendedSeverity": 1.33, "financeEscalationSeverity": 5, "breachedLineCount": 1 },
+  "lines": [ { "sku": "SV-SETUP", "discountPercent": 18, "allowedDiscountPercent": 10,
+               "excessPercent": 8, "withinPolicy": false, "requiredLevel": "MANAGER" } ]
+}</code></pre>
+      </div>
+
+      <p>
+        <code>evaluate</code> is the call the quotation builder will make on every line change —
+        the frontend renders the decision, it never computes it.
+      </p>
     </section>
 
     <section id="customers">
@@ -1452,6 +1814,25 @@
         </table>
       </div>
 
+      <h3>Categories</h3>
+      <p>
+        A tree, not a flat list — "Hardware" holds a child category that products attach to;
+        "Software" and "Service" hold products directly at the root. Both patterns coexist on
+        purpose, see <a href="#categories">Categories</a> above.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Path</th><th>Discount ceiling</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Hardware</td><td class="num">15%</td></tr>
+            <tr><td class="num">2</td><td>Hardware / Computers</td><td>—</td></tr>
+            <tr><td class="num">3</td><td>Software</td><td class="num">10%</td></tr>
+            <tr><td class="num">4</td><td>Service</td><td class="num">10%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
       <h3>Catalog</h3>
       <p>
         Prices in INR. Cost prices are set so margins differ meaningfully by category —
@@ -1463,20 +1844,26 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>SKU</th><th>Name</th><th>Category</th><th>List</th><th>Cost</th><th>Margin</th><th>Plan</th></tr>
+            <tr><th>SKU</th><th>Name</th><th>Category</th><th>Type</th><th>List</th><th>Cost</th><th>Margin</th><th>Plan</th></tr>
           </thead>
           <tbody>
-            <tr><td class="mono">HW-LAPTOP-14</td><td>ProBook 14" Laptop</td><td class="mono">HARDWARE</td><td class="num">100,000</td><td class="num">72,000</td><td class="num">28%</td><td>—</td></tr>
-            <tr><td class="mono">HW-DOCK-01</td><td>Universal Docking Station</td><td class="mono">HARDWARE</td><td class="num">8,000</td><td class="num">5,000</td><td class="num">37.5%</td><td>—</td></tr>
-            <tr><td class="mono">HW-BAG-01</td><td>Laptop Carry Case</td><td class="mono">HARDWARE</td><td class="num">2,500</td><td class="num">1,200</td><td class="num">52%</td><td>—</td></tr>
-            <tr><td class="mono">SW-OFFICE-STD</td><td>Office Suite — Standard</td><td class="mono">SOFTWARE</td><td class="num">12,000</td><td class="num">6,000</td><td class="num">50%</td><td class="mono">yes</td></tr>
-            <tr><td class="mono">SW-CLOUD-BACKUP</td><td>Cloud Backup — 1TB</td><td class="mono">SOFTWARE</td><td class="num">5,000</td><td class="num">2,000</td><td class="num">60%</td><td class="mono">yes</td></tr>
-            <tr><td class="mono">SV-SETUP</td><td>Onsite Setup &amp; Configuration</td><td class="mono">SERVICE</td><td class="num">20,000</td><td class="num">16,000</td><td class="num">20%</td><td>—</td></tr>
-            <tr><td class="mono">SV-SUPPORT-PREM</td><td>Premium Support</td><td class="mono">SERVICE</td><td class="num">15,000</td><td class="num">11,500</td><td class="num">23.3%</td><td class="mono">yes</td></tr>
-            <tr><td class="mono">SV-TRAINING</td><td>End-user Training</td><td class="mono">SERVICE</td><td class="num">18,000</td><td class="num">14,000</td><td class="num">22.2%</td><td>—</td></tr>
+            <tr><td class="mono">HW-LAPTOP-14</td><td>ProBook 14" Laptop</td><td>Hardware / Computers</td><td class="mono">GOODS</td><td class="num">100,000</td><td class="num">72,000</td><td class="num">28%</td><td>—</td></tr>
+            <tr><td class="mono">HW-DOCK-01</td><td>Universal Docking Station</td><td>Hardware / Computers</td><td class="mono">GOODS</td><td class="num">8,000</td><td class="num">5,000</td><td class="num">37.5%</td><td>—</td></tr>
+            <tr><td class="mono">HW-BAG-01</td><td>Laptop Carry Case</td><td>Hardware / Computers</td><td class="mono">GOODS</td><td class="num">2,500</td><td class="num">1,200</td><td class="num">52%</td><td>—</td></tr>
+            <tr><td class="mono">SW-OFFICE-STD</td><td>Office Suite — Standard</td><td>Software</td><td class="mono">SERVICE</td><td class="num">12,000</td><td class="num">6,000</td><td class="num">50%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SW-CLOUD-BACKUP</td><td>Cloud Backup — 1TB</td><td>Software</td><td class="mono">SERVICE</td><td class="num">5,000</td><td class="num">2,000</td><td class="num">60%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SV-SETUP</td><td>Onsite Setup &amp; Configuration</td><td>Service</td><td class="mono">SERVICE</td><td class="num">20,000</td><td class="num">16,000</td><td class="num">20%</td><td>—</td></tr>
+            <tr><td class="mono">SV-SUPPORT-PREM</td><td>Premium Support</td><td>Service</td><td class="mono">SERVICE</td><td class="num">15,000</td><td class="num">11,500</td><td class="num">23.3%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SV-TRAINING</td><td>End-user Training</td><td>Service</td><td class="mono">SERVICE</td><td class="num">18,000</td><td class="num">14,000</td><td class="num">22.2%</td><td>—</td></tr>
           </tbody>
         </table>
       </div>
+
+      <p>
+        Only <code>GOODS</code> can hold inventory — <code>SW-*</code> and <code>SV-*</code>
+        products are <code>productType: SERVICE</code>, and the Inventory endpoints reject an
+        attempt to stock one with <span class="status status--warn">400</span>.
+      </p>
 
       <p>
         The laptop plus dock plus case grouping is deliberate — it gives the upsell engine a
@@ -1520,13 +1907,16 @@
           <tbody>
             <tr><td class="mono">Role</td><td class="mono">ADMIN · SALES_REP · SALES_MANAGER · FINANCE</td></tr>
             <tr><td class="mono">CustomerTier</td><td class="mono">BRONZE · SILVER · GOLD</td></tr>
+            <tr><td class="mono">ProductType</td><td class="mono">GOODS · SERVICE · COMBO</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
-        <code>CustomerTier</code> drives the default discount ceiling a customer is entitled
-        to. It is stored now but not yet consumed — the discount risk engine will use it.
+        <code>CustomerTier</code> and a category's <code>discountCeiling</code> both drive the
+        discount risk engine — stored now, not yet consumed. <code>ProductType</code> is
+        consumed already: it's what the Inventory endpoints check before allowing a stock
+        row (<code>SERVICE</code> is rejected).
       </p>
     </section>
 
@@ -1601,7 +1991,7 @@
         </li>
         <li class="done">
           <span class="step">✓</span>
-          <span><strong>Products &amp; customers</strong><span class="what">Catalog CRUD with margin, soft delete, tiered customers</span></span>
+          <span><strong>Products, categories &amp; customers</strong><span class="what">Catalog CRUD with margin, a real category tree, image upload, tiered customers</span></span>
         </li>
         <li><span class="step">03</span><span><strong>Quotations</strong><span class="what">Builder, lines, live margin</span></span></li>
         <li><span class="step">04</span><span><strong>Discount risk &amp; approvals</strong><span class="what">Blended risk score, manager → finance chain, audit trail</span></span></li>

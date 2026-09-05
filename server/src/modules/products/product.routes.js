@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authenticateInternal } from '../../middleware/authenticate.js';
 import authorize from '../../middleware/authorize.js';
 import parseId from '../../middleware/parseId.js';
+import uploadProductImage from '../../middleware/uploadProductImage.js';
 import validate, { validateQuery } from '../../middleware/validate.js';
 import * as productController from './product.controller.js';
 import {
@@ -43,6 +44,14 @@ router.delete(
   authorize('ADMIN'),
   parseId(),
   productController.deactivate
+);
+
+router.post(
+  '/:id/image',
+  authorize('ADMIN'),
+  parseId(),
+  uploadProductImage,
+  productController.uploadImage
 );
 
 export default router;

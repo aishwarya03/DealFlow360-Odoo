@@ -17,12 +17,103 @@ enum Role {
   FINANCE
 }
 
-// Drives the default discount ceiling a customer is entitled to. Consumed by
-// the discount risk engine later; stored here so customers are tiered from day one.
-enum CustomerTier {
-  BRONZE
-  SILVER
-  GOLD
+// A table, not an enum: an admin adds PLATINUM by inserting a row, not by
+// shipping a migration. Tiers are the first half of every discount rule.
+model CustomerTier {
+  id   Int    @id @default(autoincrement())
+  code String @unique
+  name String
+
+  // Ordering only — 1 is the most conservative tier. Lets reports and pickers
+  // sort tiers by seniority without hardcoding the code strings.
+  rank Int @unique
+
+  // Lower bound of this tier's score band (0-100). A customer lands in the
+  // highest tier whose minScore they reach. Bands are data, so adding
+  // PLATINUM at 80 is a row, not a code change.
+  minScore Int @default(0)
+
+  // The tier-wide ceiling from the brief ("Bronze up to 5 percent, Silver up
+  // to 10, Gold up to 15"). Used ONLY for the order-level check in
+  // discountEvaluation.service.js — never as a fallback when a line's
+  // category rule is missing, because a missing rule must fail loudly rather
+  // than silently allow a discount.
+  defaultMaxDiscountPercent Decimal @db.Decimal(5, 2)
+
+  // "then Finance if required" (brief §5). A breach routes to a Sales Manager;
+  // Finance is added when the order's blended risk score exceeds this. It sits
+  // on the tier rather than on each rule because the score is an order-wide
+  // figure — no single line's rule can decide it.
+  financeEscalationSeverity Decimal @db.Decimal(5, 2) @default(5)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers     Customer[]
+  discountRules DiscountRule[]
+
+  @@map("customer_tiers")
+}
+
+// One configured ceiling per (tier x category). This is the whole discount
+// policy — nothing in application code hardcodes a percentage.
+//
+// Deliberately just the one number. A discount at or below maxDiscountPercent
+// needs no approval; anything above it routes to a Sales Manager. Whether
+// Finance is *also* needed is not a per-rule setting — it is decided by the
+// blended risk score across the whole order, which is the only thing that can
+// see many small breaches adding up (brief §10).
+model DiscountRule {
+  id Int @id @default(autoincrement())
+
+  customerTierId Int
+  customerTier   CustomerTier @relation(fields: [customerTierId], references: [id])
+
+  // The "product type" axis of the rule. Points at the configurable Category
+  // tree, so Hardware / Service / Subscription are rows an admin controls.
+  // Resolution walks UP the tree from a product's own category, so a rule on
+  // "Hardware" also governs products filed under "Hardware / Computers".
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  maxDiscountPercent Decimal @db.Decimal(5, 2)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Exactly one rule per pair, active or not, so resolution is deterministic
+  // — there is never a question of which of two rules applies.
+  @@unique([customerTierId, categoryId])
+  @@map("discount_rules")
+}
+
+// Singleton (id is always 1). Every number the tier scoring engine uses,
+// held as configuration so weights and targets are tunable by an admin
+// rather than compiled into the calculation.
+//
+// Weights must total 100. Each "target" is the value that earns full marks
+// for its metric — spend at or above purchaseValueTarget scores the whole
+// purchaseValueWeight, and so on.
+model TierScoringConfig {
+  id Int @id @default(1)
+
+  purchaseValueWeight Decimal @db.Decimal(5, 2) @default(40)
+  orderCountWeight    Decimal @db.Decimal(5, 2) @default(25)
+  recencyWeight       Decimal @db.Decimal(5, 2) @default(20)
+  relationshipWeight  Decimal @db.Decimal(5, 2) @default(15)
+
+  purchaseValueTarget     Decimal @db.Decimal(14, 2) @default(1250000)
+  orderCountTarget        Int     @default(28)
+  // Days since the last order at which recency scores zero; it decays
+  // linearly from full marks on the day of the order.
+  recencyHorizonDays      Int     @default(80)
+  relationshipTargetYears Decimal @db.Decimal(5, 2) @default(3)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("tier_scoring_config")
 }
 
 // Internal user. Authenticates against /api/internal/* only.
@@ -43,41 +134,99 @@ model User {
 // passwordHash is nullable: a customer record exists as a sales entity from the
 // moment a rep creates it, long before that customer is ever given portal access.
 model Customer {
-  id           Int          @id @default(autoincrement())
+  id           Int     @id @default(autoincrement())
   name         String
-  email        String       @unique
+  email        String  @unique
   passwordHash String?
-  tier         CustomerTier @default(BRONZE)
-  contactName  String?
-  phone        String?
-  isActive     Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
 
+  // Calculated, not assigned — see tierScoring.service.js. Held as a FK so
+  // discount rules can join against it, but written by the scoring engine.
+  tierId Int
+  tier   CustomerTier @relation(fields: [tierId], references: [id])
+
+  tierScore        Decimal   @db.Decimal(5, 2) @default(0)
+  tierCalculatedAt DateTime?
+
+  // The four raw metrics the tier score is computed from. Stored on the
+  // customer because there is no order history in the system yet; once the
+  // quotation/order slice lands these become derived figures refreshed from
+  // real orders, and the scoring engine itself does not change.
+  totalPurchaseValue Decimal   @db.Decimal(14, 2) @default(0)
+  completedOrders    Int       @default(0)
+  lastOrderAt        DateTime?
+  customerSince      DateTime  @default(now())
+
+  contactName String?
+  phone       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tierId])
   @@map("customers")
 }
 
-// What the product IS. This is the unit discount ceilings are configured against:
-// the spec's worked example allows Hardware 15% but Service only 10% for the same
-// customer, so every ceiling lookup is an equality check on this field.
-//
-// Deliberately NOT a place for "subscription" — how a product is billed is a
-// separate axis, held by isSubscribable below and by the billing type chosen on
-// each quotation line. A software licence has a category AND a billing mode;
-// collapsing them would leave a recurring product with no ceiling to check.
-enum ProductCategory {
-  HARDWARE
-  SOFTWARE
+// HOW the product is fulfilled — physical good, labor/service, or a bundle of
+// other products. Orthogonal to Category below: two products in the same
+// category can differ in type, and this is what the inventory layer checks
+// before allowing a stock row to be created (services are never stocked).
+// COMBO is accepted for parity with the reference product form; bundle
+// composition (which products a combo contains) is not built yet.
+enum ProductType {
+  GOODS
   SERVICE
+  COMBO
+}
+
+// A real classification tree (self-referencing), not a fixed enum — an admin
+// creates categories the same way they create products. This is the unit
+// discount ceilings are configured against: the brief's worked example allows
+// Hardware 15% but Service only 10% for the same customer, so a category's
+// ceiling is what a line's discount is checked against.
+//
+// A product may attach to a parent category directly (e.g. "Software") or to
+// one of its children (e.g. "Hardware" -> "Computers") — both patterns are
+// valid, which is what lets "Electronics" hold both sub-categories and
+// products at the same time.
+model Category {
+  id       Int    @id @default(autoincrement())
+  name     String
+
+  parentId Int?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products      Product[]
+  // Ceilings live on DiscountRule, not here: a ceiling is only meaningful for
+  // a given customer tier (Gold gets 15% on Hardware where Bronze gets 5%),
+  // so a single per-category number could never express the real policy.
+  discountRules DiscountRule[]
+
+  // Name only has to be unique among siblings — "Accessories" can exist under
+  // both "Hardware" and "Software" without colliding.
+  @@unique([parentId, name])
+  @@map("categories")
 }
 
 model Product {
-  id          Int             @id @default(autoincrement())
-  sku         String          @unique
+  id          Int         @id @default(autoincrement())
+  sku         String      @unique
   name        String
   description String?
-  category    ProductCategory
-  unit        String          @default("unit")
+  productType ProductType @default(GOODS)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  unit String @default("unit")
+
+  // Server-relative path (e.g. "/uploads/products/xyz.jpg") or an external
+  // URL. Set via PATCH directly, or via POST /:id/image which uploads a file
+  // and writes the resulting path here.
+  imageUrl String?
 
   // Whether this product MAY be sold on a recurring plan. The actual one-time vs
   // recurring decision is made per quotation line, since the same product can be
@@ -97,7 +246,7 @@ model Product {
 
   inventory   Inventory[]
 
-  @@index([category])
+  @@index([categoryId])
   @@map("products")
 }
 

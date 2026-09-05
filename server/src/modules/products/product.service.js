@@ -1,5 +1,6 @@
 import prisma from '../../prisma/client.js';
 import ApiError from '../../utils/apiError.js';
+import { getDescendantCategoryIds } from '../categories/category.service.js';
 import { marginPercent, toNumber } from '../../utils/money.js';
 
 // Shapes a Product row for the API: Decimal columns become numbers, and the
@@ -14,8 +15,22 @@ const toPublicProduct = (product) => {
     sku: product.sku,
     name: product.name,
     description: product.description,
-    category: product.category,
+    productType: product.productType,
+    category: product.category
+      ? {
+          id: product.category.id,
+          name: product.category.name,
+          parentId: product.category.parentId,
+          // "Hardware / Computers" breadcrumb. The tree is shallow by
+          // convention (admin-authored, not user data), so one parent hop is
+          // enough — same assumption category.service.js's buildTree makes.
+          path: product.category.parent
+            ? `${product.category.parent.name} / ${product.category.name}`
+            : product.category.name,
+        }
+      : { id: product.categoryId },
     unit: product.unit,
+    imageUrl: product.imageUrl,
     isSubscribable: product.isSubscribable,
     listPrice,
     costPrice,
@@ -27,14 +42,37 @@ const toPublicProduct = (product) => {
   };
 };
 
+const withCategory = {
+  category: {
+    select: {
+      id: true,
+      name: true,
+      parentId: true,
+      parent: { select: { name: true } },
+    },
+  },
+};
+
+const assertCategoryExists = async (categoryId) => {
+  if (categoryId === undefined) return;
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!category) throw ApiError.badRequest(`No category with id ${categoryId}`);
+};
+
 export const listProducts = async (filters = {}) => {
   const where = {};
 
   // Inactive products stay out of every list unless explicitly asked for: a
   // discontinued product must not appear in the quotation builder.
   if (filters.includeInactive !== 'true') where.isActive = true;
-  if (filters.category) where.category = filters.category;
+  if (filters.productType) where.productType = filters.productType;
   if (filters.isSubscribable) where.isSubscribable = filters.isSubscribable === 'true';
+
+  // Filtering by a parent category also matches its descendants — a product
+  // filed under "Hardware > Computers" should still show up under "Hardware".
+  if (filters.categoryId) {
+    where.categoryId = { in: await getDescendantCategoryIds(filters.categoryId) };
+  }
 
   if (filters.search) {
     where.OR = [
@@ -45,14 +83,15 @@ export const listProducts = async (filters = {}) => {
 
   const products = await prisma.product.findMany({
     where,
-    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    include: withCategory,
+    orderBy: [{ name: 'asc' }],
   });
 
   return products.map(toPublicProduct);
 };
 
 export const getProductById = async (id) => {
-  const product = await prisma.product.findUnique({ where: { id } });
+  const product = await prisma.product.findUnique({ where: { id }, include: withCategory });
 
   if (!product) throw ApiError.notFound(`No product with id ${id}`);
 
@@ -61,10 +100,11 @@ export const getProductById = async (id) => {
 
 export const createProduct = async (data) => {
   const existing = await prisma.product.findUnique({ where: { sku: data.sku } });
-
   if (existing) throw ApiError.conflict(`SKU ${data.sku} is already in use`);
 
-  const product = await prisma.product.create({ data });
+  await assertCategoryExists(data.categoryId);
+
+  const product = await prisma.product.create({ data, include: withCategory });
 
   return toPublicProduct(product);
 };
@@ -79,6 +119,8 @@ export const updateProduct = async (id, data) => {
     if (clash) throw ApiError.conflict(`SKU ${data.sku} is already in use`);
   }
 
+  await assertCategoryExists(data.categoryId);
+
   // A partial update can break the cost-vs-list rule using one new value against
   // one stored value, so the rule is re-checked on the merged result.
   const listPrice = data.listPrice ?? toNumber(existing.listPrice);
@@ -90,7 +132,7 @@ export const updateProduct = async (id, data) => {
     ]);
   }
 
-  const product = await prisma.product.update({ where: { id }, data });
+  const product = await prisma.product.update({ where: { id }, data, include: withCategory });
 
   return toPublicProduct(product);
 };
@@ -105,7 +147,34 @@ export const deactivateProduct = async (id) => {
   const product = await prisma.product.update({
     where: { id },
     data: { isActive: false },
+    include: withCategory,
   });
+
+  return toPublicProduct(product);
+};
+
+// Called by the upload route after multer has saved the new file to disk.
+// Removes the product's previous image from disk when replacing one, so
+// orphaned files don't accumulate under uploads/products. Silently ignores a
+// missing old file — it may already be gone, or may be an external URL that
+// was never a local upload in the first place.
+export const setProductImage = async (id, imageUrl) => {
+  const existing = await prisma.product.findUnique({ where: { id } });
+  if (!existing) throw ApiError.notFound(`No product with id ${id}`);
+
+  const product = await prisma.product.update({
+    where: { id },
+    data: { imageUrl },
+    include: withCategory,
+  });
+
+  if (existing.imageUrl?.startsWith('/uploads/products/')) {
+    const { default: fs } = await import('fs/promises');
+    const { default: path } = await import('path');
+    const { UPLOAD_ROOT } = await import('../../middleware/uploadProductImage.js');
+    const oldPath = path.join(UPLOAD_ROOT, path.basename(existing.imageUrl));
+    await fs.unlink(oldPath).catch(() => {});
+  }
 
   return toPublicProduct(product);
 };

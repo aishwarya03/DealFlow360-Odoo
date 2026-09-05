@@ -595,6 +595,23 @@ The last row is the one to enforce carefully: it's a serialization concern (a sh
 
 ---
 
+## 6a. Reconciliation with the implemented backend (2026-09-05)
+
+This file and the backend were written independently and diverged on four points. Resolved as: **keep what's built and tested, adopt what's new.** Recorded here per ground rule 15 so neither side re-decides these differently later.
+
+| Point | This file said | Backend actually does | Kept |
+|---|---|---|---|
+| Primary keys | `String @default(cuid())` | `Int @default(autoincrement())` | **Int.** Deliberate, made directly with the product owner: readable in Postman/Studio during a live demo, and IDs are never portal-facing (see §1.2 note below). |
+| Auth routes | `/auth/login`, `/portal/auth/login` | `/api/internal/auth/*`, `/api/portal/*` (portal not yet built) | **`/api/internal/*` / `/api/portal/*`.** Same internal/portal boundary this file requires (§6) — different spelling, not a different design. Enforced by JWT audience, not just the path (a portal token fails signature verification on an internal route, not just a route check). |
+| Product category | `HARDWARE / SERVICE / SUBSCRIPTION` as one enum | `HARDWARE / SOFTWARE / SERVICE` category enum + separate `isSubscribable` boolean | **The backend's split.** This file's version conflates *what a product is* (drives the discount ceiling) with *how it's billed* (drives invoicing). A subscribable software licence would have no category to check a ceiling against under the old enum. The one-time-vs-recurring choice is made per quotation line, not on the product, since the same product can be sold either way to different customers. |
+| Warehouse cost | `shippingCostWeight` (a multiplier) | `shippingCostPerShipment` (₹ per dispatch) + `priority` (tie-break) | **The backend's version.** An absolute cost lets the split score an allocation as `shipments × cost`, so two shipments from a cheap depot can legitimately beat one from an expensive one — the actual point of weighting shipments rather than just counting them. |
+
+**Adopted from this file, unchanged, for everything built from here on:** the `Company` singleton, the `Customer` / `PortalUser` split, `termsVersion` / `approvedTermsVersion` approval-versioning (§1.2), one `ApprovalRequest` per round with its own `ApprovalStep` chain (§1.3), negotiation as propose-then-apply (§1.4), and the three-trigger blended risk formula (§3). Nothing built so far conflicts with any of these — Products, Customers, Warehouses and Inventory (with an added `StockMovement` audit ledger beyond §2.8's `StockLevel`) are additive to this schema, not competing with it.
+
+`Role` already matched exactly (`ADMIN`, `SALES_REP`, `SALES_MANAGER`, `FINANCE`) — no change needed there.
+
+---
+
 ## 7. Open items
 
 Tracked here so they don't get silently decided twice by two different sessions.

@@ -1,8 +1,25 @@
 import { sendSuccess } from '../../utils/apiResponse.js';
+import {
+  getCustomerTierScore,
+  recalculateCustomerTier,
+} from '../tiers/tierScoring.service.js';
 import * as customerService from './customer.service.js';
 
+// The score breakdown — "38/40, 21/25, 17/20, 12/15" — without writing.
+export const tierScore = async (req, res) => {
+  const result = await getCustomerTierScore(req.params.id);
+
+  sendSuccess(res, 'Tier score', result);
+};
+
+export const recalculateTier = async (req, res) => {
+  const result = await recalculateCustomerTier(req.params.id);
+
+  sendSuccess(res, 'Tier recalculated', result);
+};
+
 export const list = async (req, res) => {
-  const customers = await customerService.listCustomers(req.query);
+  const customers = await customerService.listCustomers(req.validatedQuery);
 
   sendSuccess(res, 'Customers', { customers, count: customers.length });
 };

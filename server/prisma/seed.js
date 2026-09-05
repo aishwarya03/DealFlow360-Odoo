@@ -12,21 +12,97 @@ const USERS = [
   { name: 'Farhan Finance', email: 'finance@dealflow360.com', role: 'FINANCE' },
 ];
 
-const CUSTOMERS = [
-  { name: 'Acme Corp', email: 'buyer@acme.com', tier: 'GOLD' },
-  { name: 'Beta Industries', email: 'buyer@beta.com', tier: 'SILVER' },
-  { name: 'Corner Shop Ltd', email: 'buyer@cornershop.com', tier: 'BRONZE' },
+// rank orders the tiers; defaultMaxDiscountPercent is the tier-wide ceiling
+// from the brief, used only for the order-level check;
+// financeEscalationSeverity is the blended risk score above which Finance is
+// pulled in on top of the Sales Manager.
+// minScore is the band: a customer lands in the highest tier their score
+// reaches. 0-39 Bronze, 40-59 Silver, 60-79 Gold, 80-100 Platinum.
+const TIERS = [
+  { code: 'BRONZE', name: 'Bronze', rank: 1, minScore: 0, defaultMaxDiscountPercent: 5, financeEscalationSeverity: 3 },
+  { code: 'SILVER', name: 'Silver', rank: 2, minScore: 40, defaultMaxDiscountPercent: 10, financeEscalationSeverity: 4 },
+  { code: 'GOLD', name: 'Gold', rank: 3, minScore: 60, defaultMaxDiscountPercent: 15, financeEscalationSeverity: 5 },
+  { code: 'PLATINUM', name: 'Platinum', rank: 4, minScore: 80, defaultMaxDiscountPercent: 20, financeEscalationSeverity: 6 },
 ];
 
-// Prices in INR. Cost prices are set so margins differ meaningfully by category:
-// hardware carries healthy margin, services are thin. That difference is what
-// makes the blended discount risk score interesting later.
+// No tier here — it is calculated from these metrics by the scoring engine.
+// Acme carries the worked example's numbers, so seeding reproduces
+// ~89/100 -> PLATINUM. daysAgo is turned into a real date at seed time so the
+// recency component stays meaningful however long after seeding you look.
+const CUSTOMERS = [
+  {
+    name: 'Acme Corp',
+    email: 'buyer@acme.com',
+    totalPurchaseValue: 1200000,
+    completedOrders: 24,
+    lastOrderDaysAgo: 12,
+    customerSinceYearsAgo: 2.5,
+  },
+  {
+    name: 'Beta Industries',
+    email: 'buyer@beta.com',
+    totalPurchaseValue: 450000,
+    completedOrders: 11,
+    lastOrderDaysAgo: 40,
+    customerSinceYearsAgo: 1.5,
+  },
+  {
+    name: 'Corner Shop Ltd',
+    email: 'buyer@cornershop.com',
+    totalPurchaseValue: 60000,
+    completedOrders: 2,
+    lastOrderDaysAgo: 200,
+    customerSinceYearsAgo: 0.5,
+  },
+];
+
+// The entire discount policy, as data. Nothing in application code knows any
+// of these numbers — change a row here (or via PATCH /discounts/rules/:id) and
+// the engine's behaviour changes with no redeploy.
+//
+// [tier code, category path, max discount %]
+// At or below max, no approval. Above it, a Sales Manager must approve.
+const DISCOUNT_RULES = [
+  ['PLATINUM', 'Hardware', 20],
+  ['PLATINUM', 'Service', 15],
+  ['PLATINUM', 'Software', 20],
+
+  ['GOLD', 'Hardware', 15],
+  ['GOLD', 'Service', 10],
+  ['GOLD', 'Software', 15],
+
+  ['SILVER', 'Hardware', 10],
+  ['SILVER', 'Service', 7],
+  ['SILVER', 'Software', 10],
+
+  ['BRONZE', 'Hardware', 5],
+  ['BRONZE', 'Service', 3],
+  ['BRONZE', 'Software', 5],
+];
+
+// A real tree, not a flat enum — "Hardware" holds a child category
+// (Computers) that products attach to, while "Software" and "Service" hold
+// products directly at the root, demonstrating both valid patterns.
+//
+// Ceilings are NOT here: a ceiling only means something for a given customer
+// tier, so it lives on DiscountRule (tier x category) below.
+const CATEGORY_TREE = [
+  { name: 'Hardware', children: [{ name: 'Computers' }] },
+  { name: 'Software', children: [] },
+  { name: 'Service', children: [] },
+];
+
+// Prices in INR. Cost prices are set so margins differ meaningfully by
+// category: hardware carries healthy margin, services are thin. That
+// difference is what makes the blended discount risk score interesting later.
+// categoryPath resolves against CATEGORY_TREE below at seed time.
 const PRODUCTS = [
   {
     sku: 'HW-LAPTOP-14',
     name: 'ProBook 14" Laptop',
     description: 'Business laptop, 16GB RAM, 512GB SSD',
-    category: 'HARDWARE',
+    productType: 'GOODS',
+    categoryPath: 'Hardware / Computers',
     unit: 'unit',
     listPrice: 100000,
     costPrice: 72000,
@@ -36,7 +112,8 @@ const PRODUCTS = [
     sku: 'HW-DOCK-01',
     name: 'Universal Docking Station',
     description: 'Dual-monitor USB-C dock',
-    category: 'HARDWARE',
+    productType: 'GOODS',
+    categoryPath: 'Hardware / Computers',
     unit: 'unit',
     listPrice: 8000,
     costPrice: 5000,
@@ -46,7 +123,8 @@ const PRODUCTS = [
     sku: 'HW-BAG-01',
     name: 'Laptop Carry Case',
     description: 'Padded 14" case',
-    category: 'HARDWARE',
+    productType: 'GOODS',
+    categoryPath: 'Hardware / Computers',
     unit: 'unit',
     listPrice: 2500,
     costPrice: 1200,
@@ -56,7 +134,8 @@ const PRODUCTS = [
     sku: 'SW-OFFICE-STD',
     name: 'Office Suite — Standard',
     description: 'Per-seat productivity suite. Sold outright or on a plan.',
-    category: 'SOFTWARE',
+    productType: 'SERVICE',
+    categoryPath: 'Software',
     unit: 'seat',
     listPrice: 12000,
     costPrice: 6000,
@@ -67,7 +146,8 @@ const PRODUCTS = [
     sku: 'SW-CLOUD-BACKUP',
     name: 'Cloud Backup — 1TB',
     description: 'Managed offsite backup per device',
-    category: 'SOFTWARE',
+    productType: 'SERVICE',
+    categoryPath: 'Software',
     unit: 'device',
     listPrice: 5000,
     costPrice: 2000,
@@ -78,7 +158,8 @@ const PRODUCTS = [
     sku: 'SV-SETUP',
     name: 'Onsite Setup & Configuration',
     description: 'Engineer-led deployment, per day',
-    category: 'SERVICE',
+    productType: 'SERVICE',
+    categoryPath: 'Service',
     unit: 'day',
     listPrice: 20000,
     costPrice: 16000,
@@ -88,7 +169,8 @@ const PRODUCTS = [
     sku: 'SV-SUPPORT-PREM',
     name: 'Premium Support',
     description: '24/7 support retainer',
-    category: 'SERVICE',
+    productType: 'SERVICE',
+    categoryPath: 'Service',
     unit: 'month',
     listPrice: 15000,
     costPrice: 11500,
@@ -99,7 +181,8 @@ const PRODUCTS = [
     sku: 'SV-TRAINING',
     name: 'End-user Training',
     description: 'Half-day session, up to 20 attendees',
-    category: 'SERVICE',
+    productType: 'SERVICE',
+    categoryPath: 'Service',
     unit: 'session',
     listPrice: 18000,
     costPrice: 14000,
@@ -147,22 +230,94 @@ const main = async () => {
     console.log(`  user     ${user.role.padEnd(14)} ${user.email}`);
   }
 
-  for (const customer of CUSTOMERS) {
-    await prisma.customer.upsert({
-      where: { email: customer.email },
-      update: { name: customer.name, tier: customer.tier },
-      create: customer,
+  const tierIdByCode = {};
+  for (const tier of TIERS) {
+    const row = await prisma.customerTier.upsert({
+      where: { code: tier.code },
+      update: tier,
+      create: tier,
     });
-    console.log(`  customer ${customer.tier.padEnd(14)} ${customer.email}`);
+    tierIdByCode[tier.code] = row.id;
+    console.log(`  tier     ${tier.code.padEnd(14)} ceiling ${tier.defaultMaxDiscountPercent}%`);
   }
 
-  for (const product of PRODUCTS) {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  for (const { lastOrderDaysAgo, customerSinceYearsAgo, ...customer } of CUSTOMERS) {
+    const data = {
+      ...customer,
+      lastOrderAt: new Date(Date.now() - lastOrderDaysAgo * DAY_MS),
+      customerSince: new Date(Date.now() - customerSinceYearsAgo * 365.25 * DAY_MS),
+      // Placeholder — overwritten by the scoring pass below.
+      tierId: tierIdByCode.BRONZE,
+    };
+
+    await prisma.customer.upsert({
+      where: { email: customer.email },
+      update: data,
+      create: data,
+    });
+  }
+
+  // Tiers are calculated, never seeded: run the real engine so the seeded
+  // data proves the flow rather than asserting an answer.
+  const { recalculateAllTiers } = await import('../src/modules/tiers/tierScoring.service.js');
+  const scored = await recalculateAllTiers();
+  for (const row of scored.results) {
+    console.log(`  customer ${row.tier.padEnd(9)} score ${String(row.score).padStart(5)}  ${row.name}`);
+  }
+
+  // Path ("Hardware / Computers") -> categoryId, built as categories are
+  // created so PRODUCTS can reference categories by name instead of a
+  // database id that doesn't exist until this script runs.
+  const categoryIdByPath = {};
+
+  for (const root of CATEGORY_TREE) {
+    let rootRow = await prisma.category.findFirst({
+      where: { name: root.name, parentId: null },
+    });
+    rootRow = rootRow ?? (await prisma.category.create({ data: { name: root.name } }));
+
+    categoryIdByPath[root.name] = rootRow.id;
+    console.log(`  category  ${root.name}`);
+
+    for (const child of root.children) {
+      let childRow = await prisma.category.findFirst({
+        where: { name: child.name, parentId: rootRow.id },
+      });
+      childRow =
+        childRow ??
+        (await prisma.category.create({ data: { name: child.name, parentId: rootRow.id } }));
+
+      categoryIdByPath[`${root.name} / ${child.name}`] = childRow.id;
+      console.log(`  category    ${root.name} / ${child.name}`);
+    }
+  }
+
+  for (const { categoryPath, ...product } of PRODUCTS) {
+    const categoryId = categoryIdByPath[categoryPath];
+    if (!categoryId) throw new Error(`Unknown categoryPath "${categoryPath}" for ${product.sku}`);
+
     await prisma.product.upsert({
       where: { sku: product.sku },
-      update: product,
-      create: product,
+      update: { ...product, categoryId },
+      create: { ...product, categoryId },
     });
-    console.log(`  product  ${product.category.padEnd(14)} ${product.sku.padEnd(18)} ${product.name}`);
+    console.log(`  product   ${product.productType.padEnd(8)} ${product.sku.padEnd(18)} ${product.name}`);
+  }
+
+  for (const [tierCode, categoryPath, max] of DISCOUNT_RULES) {
+    const customerTierId = tierIdByCode[tierCode];
+    const categoryId = categoryIdByPath[categoryPath];
+    if (!categoryId) throw new Error(`Unknown categoryPath "${categoryPath}" in DISCOUNT_RULES`);
+
+    await prisma.discountRule.upsert({
+      where: { customerTierId_categoryId: { customerTierId, categoryId } },
+      update: { maxDiscountPercent: max, isActive: true },
+      create: { customerTierId, categoryId, maxDiscountPercent: max },
+    });
+    console.log(
+      `  rule     ${tierCode.padEnd(8)} ${categoryPath.padEnd(10)} max ${String(max).padStart(2)}%`
+    );
   }
 
   for (const warehouse of WAREHOUSES) {

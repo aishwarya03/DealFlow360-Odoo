@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const CATEGORIES = ['HARDWARE', 'SOFTWARE', 'SERVICE'];
+const PRODUCT_TYPES = ['GOODS', 'SERVICE', 'COMBO'];
 
 const money = (label) =>
   z
@@ -18,8 +18,10 @@ export const createProductSchema = z
       .toUpperCase(),
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     description: z.string().trim().max(1000).optional(),
-    category: z.enum(CATEGORIES),
+    productType: z.enum(PRODUCT_TYPES).default('GOODS'),
+    categoryId: z.number().int().positive('categoryId is required'),
     unit: z.string().trim().min(1).max(20).default('unit'),
+    imageUrl: z.string().trim().max(500).optional(),
     isSubscribable: z.boolean().default(false),
     listPrice: money('List price'),
     costPrice: money('Cost price'),
@@ -45,8 +47,10 @@ export const updateProductSchema = z
     sku: z.string().trim().min(2).max(40).toUpperCase().optional(),
     name: z.string().trim().min(2).optional(),
     description: z.string().trim().max(1000).nullable().optional(),
-    category: z.enum(CATEGORIES).optional(),
+    productType: z.enum(PRODUCT_TYPES).optional(),
+    categoryId: z.number().int().positive().optional(),
     unit: z.string().trim().min(1).max(20).optional(),
+    imageUrl: z.string().trim().max(500).nullable().optional(),
     isSubscribable: z.boolean().optional(),
     listPrice: money('List price').optional(),
     costPrice: money('Cost price').optional(),
@@ -59,7 +63,8 @@ export const updateProductSchema = z
 
 // Query strings arrive as text, so booleans and numbers are coerced here.
 export const listProductsSchema = z.object({
-  category: z.enum(CATEGORIES).optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  productType: z.enum(PRODUCT_TYPES).optional(),
   search: z.string().trim().min(1).optional(),
   isSubscribable: z.enum(['true', 'false']).optional(),
   includeInactive: z.enum(['true', 'false']).optional(),
