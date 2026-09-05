@@ -39,6 +39,9 @@ export const STATUS = {
   CONFIRMED: { label: 'Confirmed', tone: 'success' },
   RETURNED: { label: 'Returned for Revision', tone: 'warning' },
   REJECTED: { label: 'Rejected', tone: 'danger' },
+  // Customer-side decline — distinct from REJECTED (an internal approver's
+  // no). Added with the quotation lifecycle slice; see docs/SOURCE_OF_TRUTH §1.6.
+  WITHDRAWN: { label: 'Withdrawn', tone: 'danger' },
 
   // Blended risk band
   LOW: { label: 'Low Risk', tone: 'success' },
