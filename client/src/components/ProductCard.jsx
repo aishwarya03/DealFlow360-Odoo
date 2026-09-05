@@ -1,4 +1,4 @@
-import { Minus, Package, Plus, ShoppingCart } from 'lucide-react';
+import { ArrowUpRight, Minus, Package, Plus, ShoppingCart } from 'lucide-react';
 
 import Button from './Button';
 import { CATEGORY_ICONS, CATEGORY_LABELS } from '../data/catalog';
@@ -24,34 +24,56 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
       ? `${import.meta.env.VITE_API_URL}${product.imageUrl}`
       : null;
 
+  const categoryName = product.category?.path ?? product.category?.name ?? product.productType;
+
   return (
-    <div className="flex flex-col rounded-lg border border-slate-200 bg-white p-5">
-      <div className="mx-auto flex aspect-square w-28 shrink-0 items-center justify-center rounded-md bg-slate-100 sm:w-32">
+    <article className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/60">
+      <div className="relative flex aspect-[1.25/1] shrink-0 items-center justify-center overflow-hidden bg-slate-100 p-5">
+        <span className="absolute top-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase shadow-sm">
+          {product.productType === 'SERVICE' ? 'Service' : 'In stock'}
+        </span>
+        <button
+          type="button"
+          onClick={() => onRequestQuote(product, inCart ? cartQuantity : 1)}
+          className="absolute top-3 right-3 flex size-8 translate-y-1 items-center justify-center rounded-full bg-white text-slate-500 opacity-0 shadow-sm transition group-hover:translate-y-0 group-hover:opacity-100 hover:text-brand-600"
+          aria-label={`Request a quote for ${product.name}`}
+        >
+          <ArrowUpRight className="size-4" aria-hidden="true" />
+        </button>
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.name}
-            className="size-full rounded-md object-contain"
+            className="size-full object-contain mix-blend-multiply transition duration-500 group-hover:scale-105"
           />
         ) : (
-          <Icon className="size-9 text-slate-400" aria-hidden="true" />
+          <Icon className="size-14 text-slate-300 transition duration-500 group-hover:scale-110 group-hover:text-brand-300" aria-hidden="true" />
         )}
       </div>
 
-      <p className="mt-4 text-[11px] font-medium tracking-wide text-slate-400 uppercase">
-        {CATEGORY_LABELS[product.category] ?? product.category?.path ?? product.category?.name ?? product.productType}
-      </p>
-      <h3 className="mt-0.5 text-sm font-semibold text-slate-900">
-        {product.name}
-      </h3>
-      <p className="mt-1 flex-1 text-xs leading-relaxed text-slate-500">
-        {product.description}
-      </p>
-      <p className="mt-3 text-base font-semibold tabular-nums text-slate-900">
-        {formatPrice(product)}
-      </p>
+      <div className="flex flex-1 flex-col p-5">
+        <p className="text-xs font-bold tracking-[0.14em] text-brand-600 uppercase">
+          {CATEGORY_LABELS[product.category] ?? categoryName}
+        </p>
+        <h3 className="mt-2 min-h-10 text-[17px] font-semibold leading-6 text-slate-900">
+          {product.name}
+        </h3>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-relaxed text-slate-500">
+          {product.description || 'Configured for your team and ready to quote.'}
+        </p>
+        <div className="mt-5 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-lg font-bold tabular-nums text-slate-950">
+              {formatPrice(product)}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400">Indicative price</p>
+          </div>
+          {product.isSubscribable && (
+            <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">Flexible plan</span>
+          )}
+        </div>
 
-      <div className="relative mt-4 h-9">
+      <div className="relative mt-5 h-10">
         <div
           className={cn(
             'absolute inset-0 transition-all duration-200 ease-out',
@@ -100,14 +122,15 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onRequestQuote(product, inCart ? cartQuantity : 1)}
-        className="mt-2 text-xs font-medium text-slate-500 hover:text-brand-600"
-      >
-        Request a quote for just this item
-      </button>
-    </div>
+        <button
+          type="button"
+          onClick={() => onRequestQuote(product, inCart ? cartQuantity : 1)}
+          className="mt-3 text-center text-sm font-medium text-slate-400 transition hover:text-brand-600"
+        >
+          Request a quote for just this item
+        </button>
+      </div>
+    </article>
   );
 };
 

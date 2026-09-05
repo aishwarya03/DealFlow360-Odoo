@@ -116,6 +116,11 @@ export const listProducts = async (filters = {}) => {
 
 export const listPublicProducts = async (filters = {}) => {
   const result = await listProducts({ ...filters, includeInactive: 'false' });
+  const categories = await prisma.category.findMany({
+    where: { parentId: null },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
 
   return {
     products: result.products.map((product) => ({
@@ -135,6 +140,7 @@ export const listPublicProducts = async (filters = {}) => {
       price: product.listPrice,
       cycle: product.isSubscribable ? 'month' : null,
     })),
+    categories,
     pagination: result.pagination,
   };
 };
