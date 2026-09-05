@@ -8,8 +8,24 @@ import DataTable from '../../components/DataTable';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
 import { useAuth } from '../../hooks/useAuth';
-import { listProducts, createProduct, deactivateProduct, updateProduct, uploadProductImage } from '../../api/products';
+import {
+  listProducts,
+  createProduct,
+  deactivateProduct,
+  updateProduct,
+  uploadProductImage,
+  getProductSubscriptionPlans,
+  updateProductSubscriptionPlans,
+} from '../../api/products';
 import { listCategories } from '../../api/categories';
+
+const PLAN_CYCLES = [
+  { key: 'MONTHLY', label: 'Monthly' },
+  { key: 'QUARTERLY', label: 'Quarterly' },
+  { key: 'YEARLY', label: 'Yearly' },
+];
+
+const emptyPlans = () => ({ MONTHLY: '', QUARTERLY: '', YEARLY: '' });
 
 const formatMoney = (value) =>
   `₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -59,11 +75,27 @@ const ProductsPage = () => {
       listPrice: product.listPrice,
       costPrice: product.costPrice,
       taxRate: product.taxRate,
+      plans: emptyPlans(),
     } : {
       sku: '', name: '', description: '', productType: 'GOODS', categoryId: '',
       unit: 'unit', isSubscribable: false, listPrice: '', costPrice: '', taxRate: 0,
+      plans: emptyPlans(),
     });
+
+    if (product?.id && product.isSubscribable) {
+      getProductSubscriptionPlans(product.id)
+        .then((plans) => {
+          const byCycle = Object.fromEntries(plans.map((plan) => [plan.cycle, plan.amount]));
+          setForm((current) => ({ ...current, plans: { ...emptyPlans(), ...byCycle } }));
+        })
+        .catch(() => toast.error('Could not load subscription plans'));
+    }
   };
+
+  const changePlan = (cycle) => (event) => setForm((current) => ({
+    ...current,
+    plans: { ...current.plans, [cycle]: event.target.value },
+  }));
 
   const change = (key) => (event) => setForm((current) => ({
     ...current,
@@ -83,6 +115,14 @@ const ProductsPage = () => {
       };
       const saved = editing.id ? await updateProduct(editing.id, payload) : await createProduct(payload);
       const withImage = imageFile ? await uploadProductImage(saved.id, imageFile) : saved;
+
+      if (payload.isSubscribable) {
+        const plans = PLAN_CYCLES
+          .filter(({ key }) => form.plans[key] !== '' && form.plans[key] !== null && form.plans[key] !== undefined)
+          .map(({ key }) => ({ cycle: key, amount: Number(form.plans[key]) }));
+        if (plans.length > 0) await updateProductSubscriptionPlans(saved.id, plans);
+      }
+
       setProducts((current) => editing.id
         ? current.map((product) => product.id === saved.id ? withImage : product)
         : [withImage, ...current]);
@@ -208,6 +248,29 @@ const ProductsPage = () => {
             <Input label="Product image" name="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageFile(event.target.files[0])} />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.isSubscribable} onChange={change('isSubscribable')} /> Subscribable product</label>
+
+          {form.isSubscribable && (
+            <div className="rounded-md border border-slate-200 p-4">
+              <p className="text-sm font-medium text-slate-900">Subscription plans</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Amount billed per cycle. Leave a cycle blank to leave it unconfigured — a customer can't select a
+                cycle that has no amount set.
+              </p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                {PLAN_CYCLES.map(({ key, label }) => (
+                  <Input
+                    key={key}
+                    label={`${label} amount`}
+                    name={`plan-${key}`}
+                    type="number"
+                    min="0"
+                    value={form.plans[key]}
+                    onChange={changePlan(key)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </ConfigModal>
       )}
 

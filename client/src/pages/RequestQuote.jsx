@@ -94,7 +94,12 @@ const RequestQuote = () => {
     setSubmitting(true);
 
     try {
-      const lines = items.map((i) => ({ productId: i.id, quantity: i.quantity }));
+      const lines = items.map((i) => ({
+        productId: i.id,
+        quantity: i.quantity,
+        isRecurring: i.isRecurring ?? false,
+        recurringCycle: i.isRecurring ? i.recurringCycle : undefined,
+      }));
 
       let result;
       if (customer) {

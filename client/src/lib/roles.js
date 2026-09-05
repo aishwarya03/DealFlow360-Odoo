@@ -108,8 +108,8 @@ export const NAV_ITEMS = [
     label: 'Subscriptions',
     path: '/workspace/subscriptions',
     icon: Repeat,
-    roles: ['ADMIN', 'FINANCE'],
-    status: 'soon',
+    roles: ['ADMIN', 'SALES_REP', 'SALES_MANAGER', 'FINANCE'],
+    status: 'live',
     group: 'Workspace',
   },
   {

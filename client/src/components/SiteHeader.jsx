@@ -70,6 +70,11 @@ const SiteHeader = () => {
                   My Quotations
                 </Button>
               </Link>
+              <Link to="/portal/subscriptions">
+                <Button variant="ghost" size="sm">
+                  My Subscriptions
+                </Button>
+              </Link>
               <Button variant="secondary" size="sm" onClick={handleLogout}>
                 Logout
               </Button>

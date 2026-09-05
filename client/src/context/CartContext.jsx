@@ -34,15 +34,21 @@ export const CartProvider = ({ children }) => {
     writeStoredCart(items);
   }, [items]);
 
-  const addItem = useCallback((product, quantity = 1) => {
+  // `plan` carries the billing choice made on the product page for a
+  // subscribable product: { isRecurring, recurringCycle, price, cycle }.
+  // price/cycle override the product's own list price/display cycle so the
+  // cart shows what was actually picked (e.g. the YEARLY plan amount, not
+  // the one-time list price). Re-adding the same product with a different
+  // plan updates the existing line's plan instead of leaving it stale.
+  const addItem = useCallback((product, quantity = 1, plan = null) => {
     setItems((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === product.id ? { ...i, quantity: i.quantity + quantity } : i
+          i.id === product.id ? { ...i, ...plan, quantity: i.quantity + quantity } : i
         );
       }
-      return [...prev, { ...product, quantity }];
+      return [...prev, { ...product, ...plan, quantity }];
     });
   }, []);
 

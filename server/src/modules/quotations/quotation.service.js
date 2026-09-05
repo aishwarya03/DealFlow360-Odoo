@@ -3,6 +3,7 @@ import ApiError from '../../utils/apiError.js';
 import { toNumber } from '../../utils/money.js';
 import { evaluateDiscount } from '../discounts/discountEvaluation.service.js';
 import { getApplicableDiscountRule } from '../discounts/discountRule.service.js';
+import { createSubscriptionsForQuotation } from '../subscriptions/subscription.service.js';
 import { writeAudit } from './auditLog.service.js';
 
 // Statuses in which a rep sees the quotation on their own desk, still shaping
@@ -199,6 +200,24 @@ export const buildLineData = async (tierId, input) => {
     ]);
   }
 
+  // A recurring line is priced from the product's configured plan for that
+  // cycle (ProductSubscriptionPlan), not its one-time listPrice — the whole
+  // point of the plan config is that monthly/quarterly/yearly can carry
+  // different amounts. Missing/inactive plan is a business error, same as a
+  // missing discount rule below: fail loudly rather than fall back silently.
+  let unitPrice = toNumber(product.listPrice);
+  if (input.isRecurring) {
+    const plan = await prisma.productSubscriptionPlan.findUnique({
+      where: { productId_cycle: { productId: product.id, cycle: input.recurringCycle } },
+    });
+    if (!plan || !plan.isActive) {
+      throw ApiError.badRequest(`No active ${input.recurringCycle} plan configured for ${product.sku}`, [
+        { field: 'recurringCycle', message: `${product.name} has no ${input.recurringCycle} plan configured` },
+      ]);
+    }
+    unitPrice = toNumber(plan.amount);
+  }
+
   // Throws if no DiscountRule governs this tier + category anywhere up the
   // tree — a missing rule is a business error, never a silent allowance.
   const rule = await getApplicableDiscountRule(tierId, product.categoryId);
@@ -206,7 +225,7 @@ export const buildLineData = async (tierId, input) => {
   return {
     productId: product.id,
     quantity: input.quantity,
-    unitPrice: toNumber(product.listPrice),
+    unitPrice,
     discountPercent: input.discountPercent ?? 0,
     ceilingAtEntry: rule.maxDiscountPercent,
     taxRateAtEntry: toNumber(product.taxRate),
@@ -385,6 +404,7 @@ const routeQuotation = async (quotation, actingUser, auditAction) => {
         },
       });
       await writeAudit(tx, { quotationId: quotation.id, userId: actingUser.id, action: 'AUTO_CONFIRMED' });
+      await createSubscriptionsForQuotation(tx, quotation);
       return;
     }
 
@@ -441,7 +461,10 @@ export const submitQuotation = async (quotationId, actingUser) => {
 // Records a customer decision a rep learned about outside the system (no
 // portal yet — see the CUSTOMER_DECISION_STATUSES comment above).
 const recordCustomerDecision = async (quotationId, actingUser, note, targetStatus, auditAction, extraData = {}) => {
-  const quotation = await prisma.quotation.findUnique({ where: { id: quotationId } });
+  const quotation = await prisma.quotation.findUnique({
+    where: { id: quotationId },
+    include: targetStatus === 'CONFIRMED' ? { lines: true } : undefined,
+  });
   if (!quotation) throw ApiError.notFound(`No quotation with id ${quotationId}`);
   if (!CUSTOMER_DECISION_STATUSES.includes(quotation.status)) {
     throw ApiError.badRequest(`Cannot record this decision while the quotation is ${quotation.status}`);
@@ -453,6 +476,9 @@ const recordCustomerDecision = async (quotationId, actingUser, note, targetStatu
       data: { status: targetStatus, lastActivityAt: new Date(), ...extraData },
     });
     await writeAudit(tx, { quotationId, userId: actingUser.id, action: auditAction, note });
+    if (targetStatus === 'CONFIRMED') {
+      await createSubscriptionsForQuotation(tx, quotation);
+    }
   });
 
   return getQuotationById(quotationId, actingUser);

@@ -171,6 +171,7 @@ model Customer {
   quotations        Quotation[]
   chatConversations ChatConversation[]
   chatMessages      ChatMessage[]
+  subscriptions     Subscription[]
 
   @@index([tierId])
   @@map("customers")
@@ -256,9 +257,31 @@ model Product {
 
   inventory      Inventory[]
   quotationLines QuotationLine[]
+  subscriptionPlans ProductSubscriptionPlan[]
+  subscriptions     Subscription[]
 
   @@index([categoryId])
   @@map("products")
+}
+
+// One row per billing cycle a subscribable product can be sold on — the
+// "configuration" a rep's recurring QuotationLine prices itself against
+// (see buildLineData in quotation.service.js). Admin sets the amount per
+// cycle directly; there is no auto-computed discount, so a cheaper yearly
+// amount is just whatever the admin typed for YEARLY.
+model ProductSubscriptionPlan {
+  id        Int            @id @default(autoincrement())
+  productId Int
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cycle     RecurringCycle
+  amount    Decimal        @db.Decimal(12, 2)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // One configured amount per cycle per product — resolution is deterministic.
+  @@unique([productId, cycle])
+  @@map("product_subscription_plans")
 }
 
 // A stocking location. The spec's fulfillment split has to "minimise the number of
@@ -499,9 +522,132 @@ model QuotationLine {
   isRecurring    Boolean         @default(false)
   recurringCycle RecurringCycle?
 
+  subscription Subscription?
+
   @@index([quotationId])
   @@index([productId])
   @@map("quotation_lines")
+}
+
+// ── Subscriptions ──────────────────────────────────────────────────────────
+
+// One per recurring QuotationLine, created the moment its quotation is
+// CONFIRMED (see createSubscriptionsForQuotation in subscription.service.js).
+// A quotation with two recurring lines gets two independent subscriptions —
+// each has its own billing schedule, so a quantity change or cancellation on
+// one product never touches the other's.
+enum SubscriptionStatus {
+  ACTIVE // current period paid, billing normally
+  PENDING_RENEWAL_APPROVAL // next invoice raised, waiting on the customer
+  PAST_DUE // customer rejected the renewal invoice, not yet cancelled
+  CANCELLED
+}
+
+model Subscription {
+  id Int @id @default(autoincrement())
+
+  quotationLineId Int           @unique
+  quotationLine   QuotationLine @relation(fields: [quotationLineId], references: [id], onDelete: Restrict)
+  customerId      Int
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  productId       Int
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  cycle    RecurringCycle
+  quantity Int
+
+  // Price per unit for one cycle. Snapshotted from ProductSubscriptionPlan at
+  // start, and re-snapshotted on a plan/frequency change — never read live,
+  // same "snapshot, don't recompute" rule as QuotationLine.unitPrice.
+  unitAmount Decimal            @db.Decimal(12, 2)
+  status     SubscriptionStatus @default(ACTIVE)
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  nextBillingDate    DateTime
+
+  cancelAtPeriodEnd Boolean   @default(false)
+  canceledAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices SubscriptionInvoice[]
+  changes  SubscriptionChange[]
+
+  @@index([customerId])
+  @@index([status, nextBillingDate])
+  @@map("subscriptions")
+}
+
+// The "next recurring payment" — created PENDING_APPROVAL by the billing
+// scheduler when a subscription's period ends, and never auto-charged: a
+// customer must approve it in the portal before the subscription rolls
+// forward to the new period. No real payment gateway sits behind PAID (see
+// subscription.service.js) — approving is the mock "payment."
+enum SubscriptionInvoiceStatus {
+  PENDING_APPROVAL
+  PAID
+  REJECTED
+}
+
+model SubscriptionInvoice {
+  id             Int          @id @default(autoincrement())
+  subscriptionId Int
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Decimal                   @db.Decimal(12, 2)
+  status      SubscriptionInvoiceStatus @default(PENDING_APPROVAL)
+
+  paidAt     DateTime?
+  rejectedAt DateTime?
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId, status])
+  @@map("subscription_invoices")
+}
+
+// Append-only record of every quantity change, plan/frequency change and
+// cancellation, with the proration math that justified it — the transparent
+// "old vs new, prorated charge or credit" trail the portal shows before and
+// after a change is confirmed.
+enum SubscriptionChangeType {
+  QUANTITY_CHANGE
+  PLAN_CHANGE
+  CANCELLATION
+}
+
+model SubscriptionChange {
+  id             Int                    @id @default(autoincrement())
+  subscriptionId Int
+  subscription   Subscription           @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  type           SubscriptionChangeType
+
+  oldQuantity   Int?
+  newQuantity   Int?
+  oldCycle      RecurringCycle?
+  newCycle      RecurringCycle?
+  oldUnitAmount Decimal?        @db.Decimal(12, 2)
+  newUnitAmount Decimal?        @db.Decimal(12, 2)
+
+  // Positive prorationAmount is an additional charge, negative is a credit,
+  // null means no financial adjustment (e.g. a same-price swap).
+  unusedDays      Int?
+  prorationAmount Decimal?  @db.Decimal(12, 2)
+  effectiveDate   DateTime
+
+  refundAmount Decimal? @db.Decimal(12, 2)
+  refundMethod String?
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId])
+  @@map("subscription_changes")
 }
 
 // Promoted from the APPROVAL_LEVEL constant in discountEvaluation.service.js

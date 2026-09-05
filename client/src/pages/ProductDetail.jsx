@@ -12,6 +12,12 @@ import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 import { useCart } from '../hooks/useCart';
 import { formatPrice } from '../lib/currency';
 
+const PLAN_CYCLE_LABEL = { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', YEARLY: 'Yearly' };
+
+// Maps the backend's recurring cycle enum to the lowercase display key
+// formatPrice/Cart already understand ('month' / 'quarter' / 'year').
+const PLAN_DISPLAY_CYCLE = { MONTHLY: 'month', QUARTERLY: 'quarter', YEARLY: 'year' };
+
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -19,15 +25,26 @@ const ProductDetail = () => {
 
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  // null = one-time purchase; otherwise a plan cycle ('MONTHLY' | 'QUARTERLY' | 'YEARLY').
+  const [billingCycle, setBillingCycle] = useState(null);
 
   useBrandTag(`${product?.name ?? 'Product'} · ${NETRIX_TAG.title}`, NETRIX_TAG.icon);
 
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setBillingCycle(null);
 
     getPublicProduct(id)
-      .then((result) => !cancelled && setProduct(result))
+      .then((result) => {
+        if (cancelled) return;
+        setProduct(result);
+        // Subscribable products have no one-time option — default to
+        // whichever plan is configured first (e.g. Monthly).
+        if (result.isSubscribable && result.subscriptionPlans?.length > 0) {
+          setBillingCycle(result.subscriptionPlans[0].cycle);
+        }
+      })
       .catch(() => !cancelled && toast.error('Could not load this product'))
       .finally(() => !cancelled && setIsLoading(false));
 
@@ -46,14 +63,30 @@ const ProductDetail = () => {
       : null;
   const categoryName = product?.category?.path ?? product?.category?.name ?? product?.productType;
 
+  const selectedPlan = product?.subscriptionPlans?.find((plan) => plan.cycle === billingCycle) ?? null;
+
+  // What actually gets added to the cart / sent in a quote line: either the
+  // one-time list price, or the amount + cycle of whichever plan is selected
+  // — this is what makes the recurring choice on this page reach the
+  // quotation line (and, on confirm, the Subscription that gets created).
+  const buildCartLine = () =>
+    selectedPlan
+      ? {
+          isRecurring: true,
+          recurringCycle: selectedPlan.cycle,
+          price: selectedPlan.amount,
+          cycle: PLAN_DISPLAY_CYCLE[selectedPlan.cycle],
+        }
+      : { isRecurring: false, recurringCycle: null, price: product.listPrice, cycle: null };
+
   const handleAdd = () => {
-    addItem(product, 1);
+    addItem(product, 1, buildCartLine());
     toast.success(`Added ${product.name} to your quote cart`);
   };
 
   const handleRequestQuote = () => {
     navigate('/request-quote', {
-      state: { items: [{ ...product, quantity: inCart ? cartQuantity : 1 }] },
+      state: { items: [{ ...product, ...buildCartLine(), quantity: inCart ? cartQuantity : 1 }] },
     });
   };
 
@@ -106,7 +139,9 @@ const ProductDetail = () => {
 
               <div className="mt-6 flex items-end gap-3">
                 <p className="text-2xl font-bold tabular-nums text-slate-950">
-                  {formatPrice(product)}
+                  {product.isSubscribable && selectedPlan
+                    ? `₹${selectedPlan.amount.toLocaleString('en-IN')}`
+                    : formatPrice(product)}
                 </p>
                 {product.isSubscribable && (
                   <span className="mb-1 rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
@@ -114,7 +149,38 @@ const ProductDetail = () => {
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-slate-400">Indicative price, per {product.unit}</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {product.isSubscribable && billingCycle
+                  ? `Billed ${PLAN_CYCLE_LABEL[billingCycle].toLowerCase()}`
+                  : `Indicative price, per ${product.unit}`}
+              </p>
+
+              {product.isSubscribable && product.subscriptionPlans?.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-medium text-slate-500">Choose how you'd like to be billed</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {product.subscriptionPlans.map((plan) => (
+                      <button
+                        type="button"
+                        key={plan.cycle}
+                        onClick={() => setBillingCycle(plan.cycle)}
+                        className={`rounded-lg border px-3 py-2.5 text-center transition-colors ${
+                          billingCycle === plan.cycle
+                            ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-[10px] font-semibold tracking-[0.1em] text-slate-400 uppercase">
+                          {PLAN_CYCLE_LABEL[plan.cycle] ?? plan.cycle}
+                        </p>
+                        <p className="mt-1 text-sm font-bold tabular-nums text-slate-950">
+                          ₹{plan.amount.toLocaleString('en-IN')}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="relative mt-8 h-11 max-w-xs">
                 <div

@@ -61,6 +61,30 @@ export const updateProductSchema = z
     message: 'Provide at least one field to update',
   });
 
+const CYCLES = ['MONTHLY', 'QUARTERLY', 'YEARLY'];
+
+// One row per cycle the admin wants configured for this product — the
+// per-plan amount a recurring QuotationLine is priced from (see
+// buildLineData in quotation.service.js). Duplicate cycles in one payload
+// are rejected so the upsert loop in product.service.js is never handed
+// two conflicting amounts for the same cycle.
+export const upsertSubscriptionPlansSchema = z
+  .object({
+    plans: z
+      .array(
+        z.object({
+          cycle: z.enum(CYCLES),
+          amount: money('Plan amount'),
+          isActive: z.boolean().default(true),
+        })
+      )
+      .min(1, 'Provide at least one plan'),
+  })
+  .refine((data) => new Set(data.plans.map((p) => p.cycle)).size === data.plans.length, {
+    message: 'Each cycle can only appear once',
+    path: ['plans'],
+  });
+
 // Query strings arrive as text, so booleans and numbers are coerced here.
 export const listProductsSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),

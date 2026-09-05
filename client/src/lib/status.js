@@ -66,6 +66,8 @@ export const STATUS = {
   ACTIVE: { label: 'Active', tone: 'success' },
   PAUSED: { label: 'Paused', tone: 'neutral' },
   CANCELLED: { label: 'Cancelled', tone: 'neutral' },
+  PENDING_RENEWAL_APPROVAL: { label: 'Awaiting your approval', tone: 'warning' },
+  PAST_DUE: { label: 'Past Due', tone: 'danger' },
 
   // Invoice
   PAID: { label: 'Paid', tone: 'success' },

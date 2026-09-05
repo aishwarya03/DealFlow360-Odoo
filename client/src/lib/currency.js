@@ -5,7 +5,7 @@ export const formatINR = (amount) =>
     maximumFractionDigits: 0,
   }).format(amount);
 
-const CYCLE_SUFFIX = { month: '/ mo', year: '/ yr' };
+const CYCLE_SUFFIX = { month: '/ mo', quarter: '/ qtr', year: '/ yr' };
 
 export const formatPrice = (item) =>
   item.cycle ? `${formatINR(item.price)} ${CYCLE_SUFFIX[item.cycle]}` : formatINR(item.price);

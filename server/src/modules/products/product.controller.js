@@ -44,6 +44,18 @@ export const deactivate = async (req, res) => {
   sendSuccess(res, 'Product deactivated', { product });
 };
 
+export const listSubscriptionPlans = async (req, res) => {
+  const plans = await productService.listProductSubscriptionPlans(req.params.id);
+
+  sendSuccess(res, 'Subscription plans', { plans });
+};
+
+export const upsertSubscriptionPlans = async (req, res) => {
+  const plans = await productService.upsertProductSubscriptionPlans(req.params.id, req.body.plans);
+
+  sendSuccess(res, 'Subscription plans updated', { plans });
+};
+
 export const uploadImage = async (req, res) => {
   if (!req.file) throw ApiError.badRequest('No image file provided (field name: image)');
 

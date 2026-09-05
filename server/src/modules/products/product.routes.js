@@ -10,6 +10,7 @@ import {
   createProductSchema,
   listProductsSchema,
   updateProductSchema,
+  upsertSubscriptionPlansSchema,
 } from './product.validator.js';
 
 // Mounted at /api/internal/products by app.js.
@@ -52,6 +53,16 @@ router.post(
   parseId(),
   uploadProductImage,
   productController.uploadImage
+);
+
+router.get('/:id/subscription-plans', parseId(), productController.listSubscriptionPlans);
+
+router.put(
+  '/:id/subscription-plans',
+  authorize('ADMIN'),
+  parseId(),
+  validate(upsertSubscriptionPlansSchema),
+  productController.upsertSubscriptionPlans
 );
 
 export default router;

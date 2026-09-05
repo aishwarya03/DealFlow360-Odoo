@@ -1,9 +1,16 @@
 import { z } from 'zod';
 
-const lineSchema = z.object({
-  productId: z.number().int().positive(),
-  quantity: z.number().int().positive('Quantity must be at least 1'),
-});
+const lineSchema = z
+  .object({
+    productId: z.number().int().positive(),
+    quantity: z.number().int().positive('Quantity must be at least 1'),
+    isRecurring: z.boolean().default(false),
+    recurringCycle: z.enum(['MONTHLY', 'QUARTERLY', 'YEARLY']).optional(),
+  })
+  .refine((data) => !data.isRecurring || data.recurringCycle, {
+    message: 'recurringCycle is required when isRecurring is true',
+    path: ['recurringCycle'],
+  });
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2, 'Please enter your name').max(120),
