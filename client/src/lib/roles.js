@@ -69,7 +69,7 @@ export const NAV_ITEMS = [
     path: '/workspace/quotations',
     icon: FileText,
     roles: ['ADMIN', 'SALES_REP', 'SALES_MANAGER', 'FINANCE'],
-    status: 'soon',
+    status: 'live',
     group: 'Workspace',
   },
   {
@@ -79,7 +79,7 @@ export const NAV_ITEMS = [
     icon: ShieldCheck,
     // Not SALES_REP: a rep submits for approval but does not act as an approver.
     roles: ['ADMIN', 'SALES_MANAGER', 'FINANCE'],
-    status: 'soon',
+    status: 'live',
     group: 'Workspace',
   },
   {

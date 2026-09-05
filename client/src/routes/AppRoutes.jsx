@@ -1,11 +1,14 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import AppShell from '../layouts/AppShell';
+import ApprovalsPage from '../pages/app/ApprovalsPage';
 import ComingSoon from '../pages/app/ComingSoon';
 import CustomersPage from '../pages/app/CustomersPage';
 import Dashboard from '../pages/app/Dashboard';
 import InventoryPage from '../pages/app/InventoryPage';
 import ProductsPage from '../pages/app/ProductsPage';
+import QuotationDetailPage from '../pages/app/QuotationDetailPage';
+import QuotationsPage from '../pages/app/QuotationsPage';
 import WarehousesPage from '../pages/app/WarehousesPage';
 import About from '../pages/About';
 import Cart from '../pages/Cart';
@@ -57,8 +60,9 @@ const AppRoutes = () => {
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="inventory" element={<InventoryPage />} />
 
-          <Route path="quotations" element={<ComingSoon title="Quotations" />} />
-          <Route path="approvals" element={<ComingSoon title="Approvals" />} />
+          <Route path="quotations" element={<QuotationsPage />} />
+          <Route path="quotations/:id" element={<QuotationDetailPage />} />
+          <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="fulfillment" element={<ComingSoon title="Fulfillment" />} />
           <Route path="subscriptions" element={<ComingSoon title="Subscriptions" />} />
           <Route path="invoices" element={<ComingSoon title="Invoices" />} />
