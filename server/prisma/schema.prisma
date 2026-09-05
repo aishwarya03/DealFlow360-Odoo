@@ -3,12 +3,196 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-model Test {
-  id        Int      @id @default(autoincrement())
+// Internal staff roles. Fixed by the business process, so an enum rather than
+// a lookup table: no join on every auth check and invalid values cannot exist.
+enum Role {
+  ADMIN
+  SALES_REP
+  SALES_MANAGER
+  FINANCE
+}
+
+// Drives the default discount ceiling a customer is entitled to. Consumed by
+// the discount risk engine later; stored here so customers are tiered from day one.
+enum CustomerTier {
+  BRONZE
+  SILVER
+  GOLD
+}
+
+// Internal user. Authenticates against /api/internal/* only.
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(SALES_REP)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Portal user. Authenticates against /api/portal/* only, never internal routes.
+// passwordHash is nullable: a customer record exists as a sales entity from the
+// moment a rep creates it, long before that customer is ever given portal access.
+model Customer {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String?
+  tier         CustomerTier @default(BRONZE)
+  contactName  String?
+  phone        String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("customers")
+}
+
+// What the product IS. This is the unit discount ceilings are configured against:
+// the spec's worked example allows Hardware 15% but Service only 10% for the same
+// customer, so every ceiling lookup is an equality check on this field.
+//
+// Deliberately NOT a place for "subscription" — how a product is billed is a
+// separate axis, held by isSubscribable below and by the billing type chosen on
+// each quotation line. A software licence has a category AND a billing mode;
+// collapsing them would leave a recurring product with no ceiling to check.
+enum ProductCategory {
+  HARDWARE
+  SOFTWARE
+  SERVICE
+}
+
+model Product {
+  id          Int             @id @default(autoincrement())
+  sku         String          @unique
+  name        String
+  description String?
+  category    ProductCategory
+  unit        String          @default("unit")
+
+  // Whether this product MAY be sold on a recurring plan. The actual one-time vs
+  // recurring decision is made per quotation line, since the same product can be
+  // sold either way to different customers; the line validator rejects a
+  // recurring line when this is false.
+  isSubscribable Boolean      @default(false)
+
+  // Money is Decimal, never Float: binary floating point cannot represent 0.1
+  // exactly, and that error compounds across discounts, tax and proration.
+  listPrice   Decimal         @db.Decimal(12, 2)
+  costPrice   Decimal         @db.Decimal(12, 2)
+  taxRate     Decimal         @db.Decimal(5, 2) @default(0)
+
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  inventory   Inventory[]
+
+  @@index([category])
+  @@map("products")
+}
+
+// A stocking location. The spec's fulfillment split has to "minimise the number of
+// shipments" while respecting cost, so each warehouse carries the two numbers that
+// scoring needs: a fixed cost per dispatch, and a tie-breaking priority.
+model Warehouse {
+  id       Int     @id @default(autoincrement())
+  code     String  @unique
+  name     String
+  city     String?
+
+  // Fixed cost of dispatching one shipment from here, whatever it contains.
+  // The split algorithm scores an allocation as (shipments x this) so that two
+  // shipments from a cheap depot can legitimately beat one from an expensive one.
+  shippingCostPerShipment Decimal @db.Decimal(10, 2) @default(0)
+
+  // Tie-breaker when cost is equal — lower wins. Lets an admin express "prefer
+  // Main unless there is a real reason not to" without inventing a fake cost.
+  priority Int     @default(100)
+
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventory Inventory[]
+  movements StockMovement[]
+
+  @@map("warehouses")
+}
+
+// Stock of one product in one warehouse.
+//
+// onHand and reserved are stored; AVAILABLE IS NOT. Available is always
+// onHand - reserved, derived at read time. Storing all three would create two
+// numbers that must agree forever, and they eventually would not.
+model Inventory {
+  id          Int @id @default(autoincrement())
+  warehouseId Int
+  productId   Int
+
+  // Physically present in this warehouse.
+  onHandQty   Int @default(0)
+
+  // Already promised to confirmed orders but not yet shipped. Still on the shelf,
+  // no longer sellable.
+  reservedQty Int @default(0)
+
+  // Replenishment rule. reorderPoint is the level at which this location should be
+  // restocked; reorderQty is how much to bring in when it is hit.
+  reorderPoint Int @default(0)
+  reorderQty   Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  // One stock row per product per warehouse — the pair is the real identity.
+  @@unique([warehouseId, productId])
+  @@index([productId])
+  @@map("inventory")
+}
+
+enum StockMovementType {
+  RECEIPT     // stock arriving into a warehouse
+  ADJUSTMENT  // correction: stocktake, damage, shrinkage
+  RESERVATION // committed to a confirmed order
+  RELEASE     // reservation freed, e.g. cancelled order
+  SHIPMENT    // reserved stock physically dispatched
+}
+
+// An append-only ledger of every change to a stock row. Inventory holds the current
+// balance; this explains how it got there.
+//
+// Worth the extra table: the spec's "consolidate remaining backorder" prompt needs
+// to know what already shipped versus what is still owed, and an unexplained stock
+// number is the thing operations people trust least.
+model StockMovement {
+  id          Int               @id @default(autoincrement())
+  warehouseId Int
+  productId   Int
+  type        StockMovementType
+
+  // Signed deltas, so replaying the ledger reproduces the balance exactly.
+  onHandDelta   Int @default(0)
+  reservedDelta Int @default(0)
+
+  reason    String?
+  userId    Int?
+  createdAt DateTime @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([warehouseId, productId])
+  @@map("stock_movements")
 }

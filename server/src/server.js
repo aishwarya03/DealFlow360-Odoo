@@ -1,10 +1,9 @@
-import dotenv from "dotenv";
-import app from "./app.js";
+// Must be first: validates and loads env before any module that reads it at
+// import time (the Prisma client and the JWT utils both do).
+import env from './config/env.js';
 
-dotenv.config();
+import app from './app.js';
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`DealFlow360 API running on http://localhost:${env.PORT} [${env.NODE_ENV}]`);
 });

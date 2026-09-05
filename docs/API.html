@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DealFlow360 API Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* ---- Tokens: complete light palette on bare :root ---- */
+  :root {
+    --ground:      #F6F7F9;
+    --surface:     #FFFFFF;
+    --surface-sunk:#EFF2F6;
+    --ink:         #16202E;
+    --ink-soft:    #5A6676;
+    --ink-faint:   #8C96A4;
+    --line:        #DFE3E9;
+    --line-strong: #C7CED8;
+    --accent:      #2350C8;
+    --accent-ink:  #1B3E9E;
+    --accent-wash: #E8EDFB;
+    --ok:          #1B7A4B;
+    --ok-wash:     #E2F2E9;
+    --warn:        #9A5B08;
+    --warn-wash:   #FBEEDC;
+    --err:         #B03A2E;
+    --err-wash:    #FAE7E4;
+    --code-ground: #F2F4F8;
+    --shadow:      0 1px 2px rgba(22,32,46,.05), 0 8px 24px -16px rgba(22,32,46,.22);
+
+    --step--1: .8125rem;
+    --step-0:  .9375rem;
+    --step-1:  1.0625rem;
+    --step-2:  1.375rem;
+    --step-3:  1.875rem;
+    --step-4:  2.5rem;
+  }
+
+  /* System dark (no stamp) — guarded so an explicit light choice still wins */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0E141C;
+      --surface:     #151D27;
+      --surface-sunk:#111924;
+      --ink:         #E6EBF2;
+      --ink-soft:    #98A5B6;
+      --ink-faint:   #6B7889;
+      --line:        #26313F;
+      --line-strong: #354354;
+      --accent:      #7CA0FF;
+      --accent-ink:  #A6C0FF;
+      --accent-wash: #1A2740;
+      --ok:          #56C08A;
+      --ok-wash:     #162C22;
+      --warn:        #DFA451;
+      --warn-wash:   #2E2415;
+      --err:         #E6796A;
+      --err-wash:    #331D1A;
+      --code-ground: #101823;
+      --shadow:      0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+    }
+  }
+
+  /* Explicit dark choice */
+  :root[data-theme="dark"] {
+    --ground:      #0E141C;
+    --surface:     #151D27;
+    --surface-sunk:#111924;
+    --ink:         #E6EBF2;
+    --ink-soft:    #98A5B6;
+    --ink-faint:   #6B7889;
+    --line:        #26313F;
+    --line-strong: #354354;
+    --accent:      #7CA0FF;
+    --accent-ink:  #A6C0FF;
+    --accent-wash: #1A2740;
+    --ok:          #56C08A;
+    --ok-wash:     #162C22;
+    --warn:        #DFA451;
+    --warn-wash:   #2E2415;
+    --err:         #E6796A;
+    --err-wash:    #331D1A;
+    --code-ground: #101823;
+    --shadow:      0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  img { max-width: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Shell ---- */
+  .shell {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 48px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px 120px;
+    align-items: start;
+  }
+
+  /* ---- Rail ---- */
+  .rail {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 40px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rail__brand {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: var(--step-0);
+    letter-spacing: -.015em;
+    margin-bottom: 6px;
+  }
+  .rail__brand span { color: var(--accent); }
+  .rail__group {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+    margin: 20px 0 6px;
+  }
+  .rail a {
+    display: block;
+    padding: 5px 12px;
+    border-left: 2px solid var(--line);
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: var(--step--1);
+    transition: color .12s, border-color .12s;
+  }
+  .rail a:hover { color: var(--ink); border-left-color: var(--line-strong); }
+  .rail a.is-active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+  .rail a:focus-visible,
+  .copy:focus-visible,
+  .anchor:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* ---- Masthead ---- */
+  main { padding-top: 40px; min-width: 0; }
+
+  .masthead { padding: 24px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 48px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: var(--step-4);
+    letter-spacing: -.03em;
+    line-height: 1.1;
+    text-wrap: balance;
+    margin: 10px 0 14px;
+  }
+  .lede { font-size: var(--step-1); color: var(--ink-soft); max-width: 62ch; margin: 0 0 24px; }
+
+  .facts { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+  .fact { display: flex; flex-direction: column; gap: 2px; }
+  .fact dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+  }
+  .fact dd {
+    margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    font-weight: 500;
+  }
+
+  /* ---- Sections ---- */
+  section { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+  h2 {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: var(--step-3);
+    letter-spacing: -.022em;
+    line-height: 1.2;
+    text-wrap: balance;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h3 {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: var(--step-1);
+    letter-spacing: -.012em;
+    margin: 32px 0 10px;
+  }
+  .anchor {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .75rem;
+    color: var(--ink-faint);
+    text-decoration: none;
+    font-weight: 400;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  h2:hover .anchor { opacity: 1; }
+
+  p { max-width: 68ch; margin: 0 0 14px; }
+  .section-intro { color: var(--ink-soft); max-width: 68ch; margin-bottom: 24px; }
+
+  ul { max-width: 68ch; padding-left: 18px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .875em;
+    background: var(--code-ground);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .1em .34em;
+  }
+
+  /* ---- Endpoint cards ---- */
+  .endpoint {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .endpoint__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-sunk);
+  }
+  .endpoint__path {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step-0);
+    font-weight: 500;
+    word-break: break-all;
+  }
+  .endpoint__body { padding: 20px; }
+  .endpoint__body > :last-child { margin-bottom: 0; }
+
+  .method {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .method--get    { color: var(--accent); background: var(--accent-wash); border-color: var(--accent); }
+  .method--post   { color: var(--ok);     background: var(--ok-wash);     border-color: var(--ok); }
+  .method--patch  { color: var(--warn);   background: var(--warn-wash);   border-color: var(--warn); }
+  .method--put    { color: var(--warn);   background: var(--warn-wash);   border-color: var(--warn); }
+  .method--delete { color: var(--err);    background: var(--err-wash);    border-color: var(--err); }
+
+  .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-soft);
+    margin-left: auto;
+  }
+  .tag--auth  { color: var(--warn); border-color: var(--warn); background: var(--warn-wash); }
+  .tag--open  { color: var(--ink-soft); }
+  .tag--temp  { color: var(--err); border-color: var(--err); background: var(--err-wash); }
+
+  /* ---- Code blocks ---- */
+  .code {
+    position: relative;
+    margin: 0 0 18px;
+  }
+  .code__label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  pre {
+    background: var(--code-ground);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    line-height: 1.65;
+  }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+  .copy {
+    position: absolute;
+    top: 26px;
+    right: 10px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    letter-spacing: .04em;
+    padding: 4px 9px;
+    border-radius: 5px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .14s, color .14s, border-color .14s;
+  }
+  .code:hover .copy, .copy:focus-visible { opacity: 1; }
+  .copy:hover { color: var(--accent); border-color: var(--accent); }
+  .copy[data-done="1"] { color: var(--ok); border-color: var(--ok); opacity: 1; }
+
+  /* ---- Tables ---- */
+  .table-wrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--ink-faint);
+    font-weight: 500;
+    background: var(--surface-sunk);
+    white-space: nowrap;
+  }
+  td.mono, td .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; text-align: right; width: 1%; }
+
+  .status {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    font-size: .75rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .status--ok   { color: var(--ok);   background: var(--ok-wash);   border-color: var(--ok); }
+  .status--warn { color: var(--warn); background: var(--warn-wash); border-color: var(--warn); }
+  .status--err  { color: var(--err);  background: var(--err-wash);  border-color: var(--err); }
+
+  /* ---- Callout ---- */
+  .note {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 0 0 20px;
+    max-width: 68ch;
+  }
+  .note > :last-child { margin-bottom: 0; }
+  .note__title {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .note--warn { border-left-color: var(--warn); }
+  .note--warn .note__title { color: var(--warn); }
+
+  /* ---- Roadmap ---- */
+  .roadmap { list-style: none; padding: 0; max-width: 68ch; }
+  .roadmap li {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+  }
+  .roadmap li:last-child { border-bottom: 0; }
+  .roadmap .step {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .75rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .roadmap .done .step { color: var(--ok); }
+  .roadmap strong { font-weight: 600; }
+  .roadmap .what { color: var(--ink-soft); font-size: var(--step--1); display: block; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    color: var(--ink-faint);
+    font-size: var(--step--1);
+    max-width: 68ch;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+
+  @media (max-width: 900px) {
+    /* stacked layout below the two-column breakpoint */
+    .shell { grid-template-columns: 1fr; gap: 0; padding: 0 20px 80px; }
+    .rail {
+      position: static;
+      max-height: none;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 28px 0 0;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+    .rail__brand, .rail__group { width: 100%; margin: 0 0 4px; }
+    .rail a { border-left: 0; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
+    .rail a.is-active { border-color: var(--accent); }
+    main { padding-top: 24px; }
+    h1 { font-size: var(--step-3); }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <aside class="rail">
+    <div class="rail__brand">DealFlow<span>360</span></div>
+    <div class="rail__group">Conventions</div>
+    <a href="#trees">Route trees</a>
+    <a href="#envelope">Response envelope</a>
+    <a href="#status">Status codes</a>
+    <a href="#auth">Authentication</a>
+    <div class="rail__group">Auth</div>
+    <a href="#register">Register</a>
+    <a href="#login">Login</a>
+    <a href="#me">Current user</a>
+    <a href="#admin-only">Role gate probe</a>
+    <div class="rail__group">Catalog</div>
+    <a href="#products">Products</a>
+    <a href="#customers">Customers</a>
+    <div class="rail__group">Stock</div>
+    <a href="#warehouses">Warehouses</a>
+    <a href="#inventory">Inventory</a>
+    <div class="rail__group">Reference</div>
+    <a href="#postman">Postman</a>
+    <a href="#accounts">Seed accounts</a>
+    <a href="#enums">Enums</a>
+    <a href="#frontend">Frontend setup</a>
+    <a href="#roadmap">Roadmap</a>
+  </aside>
+
+  <main>
+
+    <header class="masthead">
+      <div class="eyebrow">Backend API · Living document</div>
+      <h1>DealFlow360 API Reference</h1>
+      <p class="lede">
+        Everything the frontend needs to talk to the sales operations backend.
+        Authentication, the product and customer catalog, and multi-warehouse stock
+        are implemented and verified end to end; each feature slice adds a section
+        here as it lands.
+      </p>
+      <dl class="facts">
+        <div class="fact"><dt>Base URL</dt><dd>http://localhost:3000</dd></div>
+        <div class="fact"><dt>Auth</dt><dd>Bearer JWT</dd></div>
+        <div class="fact"><dt>Format</dt><dd>application/json</dd></div>
+        <div class="fact"><dt>Implemented</dt><dd>25 endpoints</dd></div>
+      </dl>
+    </header>
+
+    <section id="trees">
+      <h2>Route trees <a class="anchor" href="#trees">#</a></h2>
+      <p class="section-intro">
+        The API is split into two trees with genuinely separate authentication
+        boundaries — not one tree with different labels.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Prefix</th><th>Who</th><th>Token audience</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mono">/api/internal/*</td>
+              <td>Staff: admin, sales rep, sales manager, finance</td>
+              <td class="mono">dealflow360:internal</td>
+            </tr>
+            <tr>
+              <td class="mono">/api/portal/*</td>
+              <td>Customers, for portal negotiation <em>(not built yet)</em></td>
+              <td class="mono">dealflow360:portal</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <div class="note__title">Why this matters</div>
+        <p>
+          The two token families are not interchangeable. A portal token sent to an
+          internal route fails <em>signature verification</em> and returns
+          <span class="status status--warn">401</span> — it is not a role check that a
+          future route could forget to apply.
+        </p>
+      </div>
+
+      <p>Unprefixed utility routes: <code>GET /health</code> and <code>GET /api/ping</code>.</p>
+    </section>
+
+    <section id="envelope">
+      <h2>Response envelope <a class="anchor" href="#envelope">#</a></h2>
+      <p class="section-intro">
+        Every response — success or failure — uses one of these shapes. Write your API
+        client against the envelope, not against individual endpoints.
+      </p>
+
+      <div class="code">
+        <div class="code__label">Success</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Logged in",
+  "data": { }
+}</code></pre>
+      </div>
+
+      <div class="code">
+        <div class="code__label">Failure</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": false,
+  "message": "Invalid email or password",
+  "errors": []
+}</code></pre>
+      </div>
+
+      <p>
+        <code>data</code> is <code>null</code> when an endpoint returns no payload.
+        <code>errors</code> is empty except on validation failures, which carry one
+        entry per bad field.
+      </p>
+
+      <div class="code">
+        <div class="code__label">Validation failure · 422</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": false,
+  "message": "Validation failed",
+  "errors": [
+    { "field": "email",    "message": "Must be a valid email address" },
+    { "field": "password", "message": "Password must be at least 8 characters" }
+  ]
+}</code></pre>
+      </div>
+
+      <p>
+        <code>field</code> uses dot notation for nested paths — for example
+        <code>lines.0.quantity</code> once quotations exist — so it maps straight onto
+        form field names.
+      </p>
+    </section>
+
+    <section id="status">
+      <h2>Status codes <a class="anchor" href="#status">#</a></h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Code</th><th>Meaning</th><th>What the frontend should do</th></tr></thead>
+          <tbody>
+            <tr><td><span class="status status--ok">200</span></td><td>OK</td><td>—</td></tr>
+            <tr><td><span class="status status--ok">201</span></td><td>Created</td><td>—</td></tr>
+            <tr><td><span class="status status--warn">401</span></td><td>Not authenticated, or bad / expired token</td><td>Clear the stored token, redirect to login</td></tr>
+            <tr><td><span class="status status--warn">403</span></td><td>Authenticated, but wrong role</td><td>Show “not permitted”. Do <strong>not</strong> log the user out</td></tr>
+            <tr><td><span class="status status--warn">404</span></td><td>Route or resource not found</td><td>—</td></tr>
+            <tr><td><span class="status status--warn">409</span></td><td>Conflict, e.g. duplicate email</td><td>Show <code>message</code> on the form</td></tr>
+            <tr><td><span class="status status--warn">422</span></td><td>Validation failed</td><td>Map <code>errors[].field</code> onto form fields</td></tr>
+            <tr><td><span class="status status--err">500</span></td><td>Server bug</td><td>Generic error toast</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note note--warn">
+        <div class="note__title">Common mistake</div>
+        <p>
+          <span class="status status--warn">401</span> means the session is gone.
+          <span class="status status--warn">403</span> means the session is fine but this
+          user may not do this. Logging someone out on a 403 is a bug.
+        </p>
+      </div>
+    </section>
+
+    <section id="auth">
+      <h2>Authentication <a class="anchor" href="#auth">#</a></h2>
+      <p class="section-intro">Login returns a JWT. Send it on every protected request.</p>
+
+      <div class="code">
+        <button class="copy" type="button">Copy</button>
+<pre><code>Authorization: Bearer &lt;token&gt;</code></pre>
+      </div>
+
+      <ul>
+        <li><strong>Lifetime:</strong> 7 days, set by <code>JWT_EXPIRES_IN</code>.</li>
+        <li><strong>Claims:</strong> <code>sub</code> (user id, as a string), <code>email</code>, <code>role</code>, <code>aud</code>, <code>iss</code>, <code>exp</code>.</li>
+        <li><strong>Treat the token as opaque.</strong> Read the user from <code>/me</code> rather than decoding it — the server re-checks the account on every call, so a deactivated user stops working immediately instead of at token expiry.</li>
+        <li>There is no refresh endpoint. On a 401, send the user back to login.</li>
+      </ul>
+    </section>
+
+    <section id="register">
+      <h2>Register <a class="anchor" href="#register">#</a></h2>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/auth/register</span>
+          <span class="tag tag--open">No auth</span>
+        </div>
+        <div class="endpoint__body">
+          <p>Creates a staff account and logs it in immediately.</p>
+
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "name": "Rohan Rep",
+  "email": "rep@dealflow360.com",
+  "password": "Password123",
+  "role": "SALES_REP"
+}</code></pre>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Type</th><th>Rules</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">name</td><td>string</td><td>Required, min 2 characters, trimmed</td></tr>
+                <tr><td class="mono">email</td><td>string</td><td>Required, valid email, lowercased automatically</td></tr>
+                <tr><td class="mono">password</td><td>string</td><td>Required, min 8 characters</td></tr>
+                <tr><td class="mono">role</td><td>enum</td><td>Optional, defaults to <code>SALES_REP</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note note--warn">
+            <div class="note__title">Demo-only behaviour</div>
+            <p>
+              Accepting <code>role</code> at signup exists so every role the demo needs can
+              be created without a bootstrap admin. In production this field would be
+              rejected here and role assignment moved to an admin-only endpoint.
+            </p>
+          </div>
+
+          <div class="code">
+            <div class="code__label">201 Created</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Account created",
+  "data": {
+    "user": {
+      "id": 2,
+      "name": "Rohan Rep",
+      "email": "rep@dealflow360.com",
+      "role": "SALES_REP",
+      "isActive": true,
+      "createdAt": "2026-09-05T08:49:16.992Z"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}</code></pre>
+          </div>
+
+          <p>
+            Errors: <span class="status status--warn">409</span> email already exists ·
+            <span class="status status--warn">422</span> validation failed.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="login">
+      <h2>Login <a class="anchor" href="#login">#</a></h2>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/auth/login</span>
+          <span class="tag tag--open">No auth</span>
+        </div>
+        <div class="endpoint__body">
+
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "email": "rep@dealflow360.com",
+  "password": "Password123"
+}</code></pre>
+          </div>
+
+          <p>
+            <span class="status status--ok">200</span> returns the same shape as register:
+            <code>data.user</code> and <code>data.token</code>.
+          </p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Message</th><th>Cause</th></tr></thead>
+              <tbody>
+                <tr><td><span class="status status--warn">401</span></td><td class="mono">Invalid email or password</td><td>Unknown email <em>or</em> wrong password</td></tr>
+                <tr><td><span class="status status--warn">403</span></td><td class="mono">This account has been deactivated</td><td><code>isActive</code> is false</td></tr>
+                <tr><td><span class="status status--warn">422</span></td><td class="mono">Validation failed</td><td>Malformed body</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note">
+            <div class="note__title">Deliberate design</div>
+            <p>
+              The 401 message is identical for an unknown email and a wrong password, so
+              the endpoint cannot be used to discover which emails have accounts. Don't try
+              to show a more specific message — the server will not tell you which it was.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="me">
+      <h2>Current user <a class="anchor" href="#me">#</a></h2>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/auth/me</span>
+          <span class="tag tag--auth">Auth required</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Returns the authenticated user. Use this on app boot to restore a session from a
+            stored token: <span class="status status--ok">200</span> means the token is still
+            good, <span class="status status--warn">401</span> means clear it and show login.
+          </p>
+
+          <div class="code">
+            <div class="code__label">200 OK</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Current user",
+  "data": {
+    "user": {
+      "id": 2,
+      "name": "Rohan Rep",
+      "email": "rep@dealflow360.com",
+      "role": "SALES_REP",
+      "isActive": true,
+      "createdAt": "2026-09-05T08:49:16.992Z"
+    }
+  }
+}</code></pre>
+          </div>
+
+          <p>
+            <span class="status status--warn">401</span> covers a missing, malformed, expired,
+            or wrong-audience token, and an account deactivated since the token was issued.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="admin-only">
+      <h2>Role gate probe <a class="anchor" href="#admin-only">#</a></h2>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/auth/admin-only</span>
+          <span class="tag tag--temp">Temporary</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            A scaffold route that exists only to prove the role gate works from Postman. It
+            will be deleted once real admin routes exist — <strong>do not build against it.</strong>
+          </p>
+          <p>
+            Returns <span class="status status--ok">200</span> for an admin and
+            <span class="status status--warn">403</span> for anyone else, with the message
+            <code>Requires one of: ADMIN. You are SALES_REP.</code>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="products">
+      <h2>Products <a class="anchor" href="#products">#</a></h2>
+      <p class="section-intro">
+        The catalog every quotation is built from. Reads are open to all staff — a rep
+        cannot build a quote without them. Writes are admin-only, because the catalog is
+        backend configuration.
+      </p>
+
+      <div class="note">
+        <div class="note__title">Two independent axes</div>
+        <p>
+          <code>category</code> says what a product <em>is</em> and drives its discount
+          ceiling. <code>isSubscribable</code> says whether it <em>may</em> be sold on a
+          recurring plan. A software licence has both; collapsing them into one enum would
+          leave a recurring product with no ceiling for the risk engine to check. The
+          one-time vs recurring choice itself is made per quotation line, since the same
+          product can be sold either way to different customers.
+        </p>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/products</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>Returns active products, ordered by category then name.</p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Query param</th><th>Values</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">category</td><td class="mono">HARDWARE · SOFTWARE · SERVICE</td><td>Filter by category</td></tr>
+                <tr><td class="mono">isSubscribable</td><td class="mono">true · false</td><td>Only products sellable on a plan</td></tr>
+                <tr><td class="mono">search</td><td>any text</td><td>Case-insensitive match on name or SKU</td></tr>
+                <tr><td class="mono">includeInactive</td><td class="mono">true · false</td><td>Include deactivated products</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>An unrecognised value returns <span class="status status--warn">422</span> with the accepted options listed.</p>
+
+          <div class="code">
+            <div class="code__label">200 OK</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Products",
+  "data": {
+    "products": [
+      {
+        "id": 3,
+        "sku": "HW-BAG-01",
+        "name": "Laptop Carry Case",
+        "description": "Padded 14\" case",
+        "category": "HARDWARE",
+        "unit": "unit",
+        "isSubscribable": false,
+        "listPrice": 2500,
+        "costPrice": 1200,
+        "taxRate": 18,
+        "marginPercent": 52,
+        "isActive": true,
+        "createdAt": "2026-09-05T09:36:07.955Z",
+        "updatedAt": "2026-09-05T09:36:07.955Z"
+      }
+    ],
+    "count": 8
+  }
+}</code></pre>
+          </div>
+
+          <p>
+            <code>marginPercent</code> is computed server-side as
+            <code>(listPrice − costPrice) / listPrice × 100</code>. Don't recompute it in the
+            frontend — one formula, one place, so every screen shows the same figure.
+          </p>
+
+          <div class="note">
+            <div class="note__title">Money is numbers, not strings</div>
+            <p>
+              Prices are stored as SQL <code>DECIMAL</code>, because binary floating point
+              cannot represent 0.1 exactly and that error compounds across discounts, tax and
+              proration. They are converted to plain JSON numbers at the API edge, so the
+              frontend needs no decimal library.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/products/:id</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Single product, same shape as above under <code>data.product</code>.
+            <span class="status status--warn">404</span> if it doesn't exist,
+            <span class="status status--warn">400</span> if the id isn't a positive integer.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/products</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "sku": "HW-MONITOR-27",
+  "name": "27\" 4K Monitor",
+  "description": "Colour-accurate desktop display",
+  "category": "HARDWARE",
+  "unit": "unit",
+  "isSubscribable": false,
+  "listPrice": 32000,
+  "costPrice": 21000,
+  "taxRate": 18
+}</code></pre>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Type</th><th>Rules</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">sku</td><td>string</td><td>Required, 2–40 chars, unique, uppercased automatically</td></tr>
+                <tr><td class="mono">name</td><td>string</td><td>Required, min 2 chars</td></tr>
+                <tr><td class="mono">description</td><td>string</td><td>Optional, max 1000 chars</td></tr>
+                <tr><td class="mono">category</td><td>enum</td><td>Required</td></tr>
+                <tr><td class="mono">unit</td><td>string</td><td>Optional, defaults to <code>unit</code></td></tr>
+                <tr><td class="mono">isSubscribable</td><td>boolean</td><td>Optional, defaults to <code>false</code></td></tr>
+                <tr><td class="mono">listPrice</td><td>number</td><td>Required, ≥ 0</td></tr>
+                <tr><td class="mono">costPrice</td><td>number</td><td>Required, ≥ 0, <strong>must not exceed listPrice</strong></td></tr>
+                <tr><td class="mono">taxRate</td><td>number</td><td>Optional, 0–100, defaults to 0</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            Errors: <span class="status status--warn">403</span> not an admin ·
+            <span class="status status--warn">409</span> SKU in use ·
+            <span class="status status--warn">422</span> validation failed, including cost
+            above list — selling below cost is a margin error, so no quotation can ever be
+            built on a product with negative margin at list price.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--patch">PATCH</span>
+          <span class="endpoint__path">/api/internal/products/:id</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Partial update — send only the fields that change. An empty body returns
+            <span class="status status--warn">422</span>.
+          </p>
+          <p>
+            The cost-versus-list rule is re-checked against the <em>stored</em> record, so
+            lowering <code>listPrice</code> below the existing <code>costPrice</code> is
+            rejected with <span class="status status--warn">400</span> even though the request
+            body alone looks valid.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--delete">DELETE</span>
+          <span class="endpoint__path">/api/internal/products/:id</span>
+          <span class="tag tag--auth">ADMIN</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            <strong>Soft delete.</strong> Sets <code>isActive: false</code> and returns the
+            updated product. The row is never removed, because quotation lines reference it
+            and that history has to stay readable after a product is withdrawn from sale.
+          </p>
+          <p>
+            Deactivated products disappear from list results unless you pass
+            <code>includeInactive=true</code>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="customers">
+      <h2>Customers <a class="anchor" href="#customers">#</a></h2>
+      <p class="section-intro">
+        Unlike the product catalog, reps and managers create and edit customers — that is
+        sales work, not backend configuration. Only admins may deactivate one.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Route</th><th>Method</th><th>Who</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">/api/internal/customers</td><td class="mono">GET</td><td>Any staff</td></tr>
+            <tr><td class="mono">/api/internal/customers/:id</td><td class="mono">GET</td><td>Any staff</td></tr>
+            <tr><td class="mono">/api/internal/customers</td><td class="mono">POST</td><td>ADMIN · SALES_REP · SALES_MANAGER</td></tr>
+            <tr><td class="mono">/api/internal/customers/:id</td><td class="mono">PATCH</td><td>ADMIN · SALES_REP · SALES_MANAGER</td></tr>
+            <tr><td class="mono">/api/internal/customers/:id</td><td class="mono">DELETE</td><td>ADMIN</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>List filters: <code>tier</code>, <code>search</code> (name or email), <code>includeInactive</code>.</p>
+
+      <div class="code">
+        <div class="code__label">POST body</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "name": "Delta Systems",
+  "email": "buyer@delta.com",
+  "tier": "SILVER",
+  "contactName": "Priya N",
+  "phone": "+91 98765 43210"
+}</code></pre>
+      </div>
+
+      <p>
+        <code>name</code> and <code>email</code> are required; email is lowercased and must be
+        unique. <code>tier</code> defaults to <code>BRONZE</code>, the most conservative
+        ceiling. <code>contactName</code> and <code>phone</code> are optional.
+      </p>
+
+      <div class="code">
+        <div class="code__label">201 Created</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Customer created",
+  "data": {
+    "customer": {
+      "id": 7,
+      "name": "Delta Systems",
+      "email": "buyer@delta.com",
+      "tier": "SILVER",
+      "contactName": "Priya N",
+      "phone": "+91 98765 43210",
+      "hasPortalAccess": false,
+      "isActive": true,
+      "createdAt": "2026-09-05T09:41:52.312Z",
+      "updatedAt": "2026-09-05T09:41:52.312Z"
+    }
+  }
+}</code></pre>
+      </div>
+
+      <p>
+        <code>hasPortalAccess</code> is derived, not stored — it reports whether this customer
+        has been given a portal password yet. The password hash itself never leaves the
+        service layer.
+      </p>
+    </section>
+
+    <section id="warehouses">
+      <h2>Warehouses <a class="anchor" href="#warehouses">#</a></h2>
+      <p class="section-intro">
+        Stocking locations. Reads are open to all staff — a rep needs to know where stock
+        sits when a customer asks about delivery. Warehouse setup is backend
+        configuration, so writes are admin-only.
+      </p>
+
+      <div class="note">
+        <div class="note__title">Two numbers the split algorithm needs</div>
+        <p>
+          <code>shippingCostPerShipment</code> is the fixed cost of one dispatch from this
+          location, whatever it contains. Scoring an allocation as
+          <em>shipments × cost</em> means two shipments from a cheap depot can legitimately
+          beat one from an expensive one — which is the whole point of weighting rather
+          than just counting shipments. <code>priority</code> breaks ties, so an admin can
+          say “prefer Main unless there's a real reason not to” without inventing a fake cost.
+        </p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Route</th><th>Method</th><th>Who</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">/api/internal/warehouses</td><td class="mono">GET</td><td>Any staff</td></tr>
+            <tr><td class="mono">/api/internal/warehouses/:id</td><td class="mono">GET</td><td>Any staff</td></tr>
+            <tr><td class="mono">/api/internal/warehouses</td><td class="mono">POST</td><td>ADMIN</td></tr>
+            <tr><td class="mono">/api/internal/warehouses/:id</td><td class="mono">PATCH</td><td>ADMIN</td></tr>
+            <tr><td class="mono">/api/internal/warehouses/:id</td><td class="mono">DELETE</td><td>ADMIN</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Lists are ordered cheapest-dispatch first with <code>priority</code> as the
+        tie-break — the order a split would naturally consider them in. Filters:
+        <code>search</code> (name, code or city), <code>includeInactive</code>.
+      </p>
+
+      <div class="code">
+        <div class="code__label">POST body</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "code": "WEST",
+  "name": "West Depot",
+  "city": "Mumbai",
+  "shippingCostPerShipment": 320,
+  "priority": 40
+}</code></pre>
+      </div>
+
+      <p>
+        <code>code</code> is required, unique, and uppercased automatically.
+        <code>shippingCostPerShipment</code> defaults to 0 and <code>priority</code> to 100.
+      </p>
+
+      <div class="note note--warn">
+        <div class="note__title">Deactivation is refused while stock remains</div>
+        <p>
+          <code>DELETE</code> returns <span class="status status--warn">400</span> if the
+          warehouse still holds anything on hand or reserved, naming the quantities. Hiding
+          a location that physically contains goods turns a reporting problem into a
+          lost-inventory problem.
+        </p>
+      </div>
+    </section>
+
+    <section id="inventory">
+      <h2>Inventory <a class="anchor" href="#inventory">#</a></h2>
+      <p class="section-intro">
+        Stock of one product in one warehouse. Reads are open to all staff; writes belong to
+        <code>ADMIN</code> and <code>FINANCE</code> — the spec puts warehouse and backorder
+        decisions with Finance/Operations, and a rep should not be able to move stock
+        numbers to make a deal work.
+      </p>
+
+      <h3>Three quantities, one of them derived</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Field</th><th>Stored?</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">onHandQty</td><td>Yes</td><td>Physically present in this warehouse</td></tr>
+            <tr><td class="mono">reservedQty</td><td>Yes</td><td>Promised to confirmed orders, not yet shipped. Still on the shelf, no longer sellable</td></tr>
+            <tr><td class="mono">availableQty</td><td><strong>No</strong></td><td><code>onHand − reserved</code>, computed at read time</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <div class="note__title">Why available is never stored</div>
+        <p>
+          Storing all three creates two numbers that must agree forever, and eventually they
+          would not. Everything that asks “can I promise this?” reads
+          <code>availableQty</code>, including <code>needsReorder</code> — a location is
+          below its reorder point on what it can still <em>sell</em>, because stock already
+          promised to someone else cannot save you.
+        </p>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/inventory/availability/:productId</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            The question the fulfillment split will ask: where can this product be found, and
+            how much can actually be promised. Locations come back cheapest-dispatch first.
+          </p>
+
+          <div class="code">
+            <div class="code__label">200 OK — laptop across three warehouses</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "success": true,
+  "message": "Availability",
+  "data": {
+    "product": { "id": 1, "sku": "HW-LAPTOP-14", "name": "ProBook 14\" Laptop", "unit": "unit" },
+    "totalOnHand": 12,
+    "totalReserved": 0,
+    "totalAvailable": 12,
+    "stockedLocations": 3,
+    "locations": [ ... ]
+  }
+}</code></pre>
+          </div>
+
+          <p>
+            <code>stockedLocations</code> is how many separate dispatches this product could
+            involve if drawn from everywhere. Getting that number down is the split
+            algorithm's job.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/inventory</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            All stock rows with their warehouse and product. Filters:
+            <code>warehouseId</code>, <code>productId</code>, <code>lowStock=true</code>,
+            <code>inStockOnly=true</code>.
+          </p>
+          <p>
+            <code>GET /api/internal/inventory/low-stock</code> is the same worklist,
+            already filtered and sorted worst-first.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--put">PUT</span>
+          <span class="endpoint__path">/api/internal/inventory</span>
+          <span class="tag tag--auth">ADMIN · FINANCE</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            <strong>Absolute set</strong> — “this location now holds exactly N”. For a
+            stocktake result, or loading a new product into a warehouse. Creates the stock
+            row if it doesn't exist.
+          </p>
+
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "warehouseId": 3,
+  "productId": 2,
+  "onHandQty": 12,
+  "reorderPoint": 5,
+  "reorderQty": 20,
+  "reason": "Initial load"
+}</code></pre>
+          </div>
+
+          <p>
+            Setting on-hand below what is already reserved returns
+            <span class="status status--warn">400</span> — that would mean stock has been
+            sold that cannot be delivered.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--post">POST</span>
+          <span class="endpoint__path">/api/internal/inventory/adjust</span>
+          <span class="tag tag--auth">ADMIN · FINANCE</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            <strong>Signed change</strong> — “20 units arrived”, “3 were damaged”. Kept
+            separate from <code>PUT</code> because “add 20” and “make it 20” are different
+            operations, and conflating them is how stock goes wrong under concurrent edits.
+          </p>
+
+          <div class="code">
+            <div class="code__label">Request body</div>
+            <button class="copy" type="button">Copy</button>
+<pre><code>{
+  "warehouseId": 1,
+  "productId": 1,
+  "delta": 10,
+  "reason": "Delivery GRN-4471"
+}</code></pre>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>When</th></tr></thead>
+              <tbody>
+                <tr><td><span class="status status--warn">422</span></td><td><code>reason</code> missing, or <code>delta</code> is zero</td></tr>
+                <tr><td><span class="status status--warn">400</span></td><td>Would push stock negative, or below what is reserved</td></tr>
+                <tr><td><span class="status status--warn">404</span></td><td>No stock row yet — set an initial level first</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            <code>reason</code> is required here but optional on <code>PUT</code>: an
+            unexplained correction to a balance is exactly what makes inventory
+            untrustworthy.
+          </p>
+        </div>
+      </div>
+
+      <div class="endpoint">
+        <div class="endpoint__head">
+          <span class="method method--get">GET</span>
+          <span class="endpoint__path">/api/internal/inventory/movements</span>
+          <span class="tag tag--auth">Any staff</span>
+        </div>
+        <div class="endpoint__body">
+          <p>
+            Append-only ledger explaining how a balance got where it is: type, signed deltas,
+            reason, and the user who did it. Filter by <code>warehouseId</code> and
+            <code>productId</code>. Newest first, 50 most recent.
+          </p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">RECEIPT</td><td>Stock arriving into a warehouse</td></tr>
+                <tr><td class="mono">ADJUSTMENT</td><td>Correction: stocktake, damage, shrinkage</td></tr>
+                <tr><td class="mono">RESERVATION</td><td>Committed to a confirmed order</td></tr>
+                <tr><td class="mono">RELEASE</td><td>Reservation freed, e.g. cancelled order</td></tr>
+                <tr><td class="mono">SHIPMENT</td><td>Reserved stock physically dispatched</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            <code>RECEIPT</code> and <code>ADJUSTMENT</code> are produced now; the other
+            three arrive with order fulfillment. The stock row and its movement are written
+            in one transaction, so a balance can never change without a record explaining it.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="postman">
+      <h2>Testing in Postman <a class="anchor" href="#postman">#</a></h2>
+      <p class="section-intro">
+        An importable collection covering every endpoint lives at
+        <code>docs/DealFlow360.postman_collection.json</code>.
+      </p>
+
+      <h3>Import it</h3>
+      <ul>
+        <li>Postman → <strong>Import</strong> → drop in the JSON file</li>
+        <li>Open the <strong>DealFlow360 API</strong> collection</li>
+        <li>Run <strong>Auth → Login as ADMIN</strong></li>
+      </ul>
+
+      <div class="note">
+        <div class="note__title">No token copy-pasting</div>
+        <p>
+          The login requests carry a test script that writes the returned token into the
+          <code>{{token}}</code> collection variable, and the collection sends
+          <code>Authorization: Bearer {{token}}</code> on every other request. Log in once and
+          everything else just works. Run <strong>Login as SALES_REP</strong> to switch
+          identity and watch the same requests start returning
+          <span class="status status--warn">403</span>.
+        </p>
+      </div>
+
+      <h3>Collection variables</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Default</th><th>Set by</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">baseUrl</td><td class="mono">http://localhost:3000</td><td>You, if the port differs</td></tr>
+            <tr><td class="mono">token</td><td>empty</td><td>Either login request, automatically</td></tr>
+            <tr><td class="mono">role</td><td>empty</td><td>Either login request — shows who you are acting as</td></tr>
+            <tr><td class="mono">productId</td><td class="mono">1</td><td>Create product, automatically</td></tr>
+            <tr><td class="mono">customerId</td><td class="mono">1</td><td>Create customer, automatically</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>A run worth doing</h3>
+      <ul>
+        <li><strong>Login as ADMIN</strong> → <strong>Create product</strong> → 201, and <code>productId</code> updates itself</li>
+        <li><strong>Update product</strong> → watch <code>marginPercent</code> recalculate</li>
+        <li><strong>Deactivate product</strong> → then <strong>List products</strong>: it's gone. <strong>List — include inactive</strong>: it's back</li>
+        <li><strong>Login as SALES_REP</strong> → <strong>Create product</strong> again → <span class="status status--warn">403</span>, while <strong>List products</strong> still works</li>
+        <li><strong>Create customer</strong> as the rep → 201, because customers are sales work, not configuration</li>
+      </ul>
+
+      <p>
+        Requests that are <em>meant</em> to fail are named with their expected status, so a red
+        response there is the test passing.
+      </p>
+    </section>
+
+    <section id="accounts">
+      <h2>Seed accounts <a class="anchor" href="#accounts">#</a></h2>
+      <p class="section-intro">
+        Created by <code>npm run seed</code> in <code>server/</code>. Every account uses the
+        password <code>Password123</code>. The seed is idempotent — re-running updates
+        existing rows rather than failing.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Email</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td class="mono">admin@dealflow360.com</td><td class="mono">ADMIN</td></tr>
+            <tr><td class="num">2</td><td class="mono">rep@dealflow360.com</td><td class="mono">SALES_REP</td></tr>
+            <tr><td class="num">3</td><td class="mono">manager@dealflow360.com</td><td class="mono">SALES_MANAGER</td></tr>
+            <tr><td class="num">4</td><td class="mono">finance@dealflow360.com</td><td class="mono">FINANCE</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Customers</h3>
+      <p>No portal password yet — portal login is not built.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Tier</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Acme Corp</td><td class="mono">buyer@acme.com</td><td class="mono">GOLD</td></tr>
+            <tr><td class="num">2</td><td>Beta Industries</td><td class="mono">buyer@beta.com</td><td class="mono">SILVER</td></tr>
+            <tr><td class="num">3</td><td>Corner Shop Ltd</td><td class="mono">buyer@cornershop.com</td><td class="mono">BRONZE</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Catalog</h3>
+      <p>
+        Prices in INR. Cost prices are set so margins differ meaningfully by category —
+        hardware carries healthy margin, services are thin. That gap is what will make the
+        blended discount risk score interesting: the same discount is comfortable on a
+        laptop and alarming on a setup day.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>SKU</th><th>Name</th><th>Category</th><th>List</th><th>Cost</th><th>Margin</th><th>Plan</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">HW-LAPTOP-14</td><td>ProBook 14" Laptop</td><td class="mono">HARDWARE</td><td class="num">100,000</td><td class="num">72,000</td><td class="num">28%</td><td>—</td></tr>
+            <tr><td class="mono">HW-DOCK-01</td><td>Universal Docking Station</td><td class="mono">HARDWARE</td><td class="num">8,000</td><td class="num">5,000</td><td class="num">37.5%</td><td>—</td></tr>
+            <tr><td class="mono">HW-BAG-01</td><td>Laptop Carry Case</td><td class="mono">HARDWARE</td><td class="num">2,500</td><td class="num">1,200</td><td class="num">52%</td><td>—</td></tr>
+            <tr><td class="mono">SW-OFFICE-STD</td><td>Office Suite — Standard</td><td class="mono">SOFTWARE</td><td class="num">12,000</td><td class="num">6,000</td><td class="num">50%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SW-CLOUD-BACKUP</td><td>Cloud Backup — 1TB</td><td class="mono">SOFTWARE</td><td class="num">5,000</td><td class="num">2,000</td><td class="num">60%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SV-SETUP</td><td>Onsite Setup &amp; Configuration</td><td class="mono">SERVICE</td><td class="num">20,000</td><td class="num">16,000</td><td class="num">20%</td><td>—</td></tr>
+            <tr><td class="mono">SV-SUPPORT-PREM</td><td>Premium Support</td><td class="mono">SERVICE</td><td class="num">15,000</td><td class="num">11,500</td><td class="num">23.3%</td><td class="mono">yes</td></tr>
+            <tr><td class="mono">SV-TRAINING</td><td>End-user Training</td><td class="mono">SERVICE</td><td class="num">18,000</td><td class="num">14,000</td><td class="num">22.2%</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        The laptop plus dock plus case grouping is deliberate — it gives the upsell engine a
+        real co-purchase pattern to rank later.
+      </p>
+
+      <h3>Warehouses and stock</h3>
+      <p>
+        Stock is split so the fulfillment demo has a real decision to make: no single
+        location can fill an order for 10 laptops, and the cheapest depot is not the one
+        with the most stock.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Warehouse</th><th>City</th><th>Cost/shipment</th><th>Laptop</th><th>Dock</th><th>Case</th><th>Office</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">MAIN</td><td>Bengaluru</td><td class="num">250</td><td class="num">6</td><td class="num">25</td><td class="num">40</td><td class="num">100</td></tr>
+            <tr><td class="mono">NORTH</td><td>Delhi</td><td class="num">380</td><td class="num">2</td><td class="num">—</td><td class="num">3</td><td class="num">—</td></tr>
+            <tr><td class="mono">EAST</td><td>Kolkata</td><td class="num">400</td><td class="num">4</td><td class="num">8</td><td class="num">—</td><td class="num">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Services and cloud subscriptions are deliberately unstocked — not everything sold is
+        a physical good, which is itself a rule the split has to respect. Three rows start at
+        or below their reorder point, so the low-stock worklist is not empty on a fresh seed.
+      </p>
+    </section>
+
+    <section id="enums">
+      <h2>Enums <a class="anchor" href="#enums">#</a></h2>
+      <p class="section-intro">Sent and received as these exact uppercase strings.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Enum</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">Role</td><td class="mono">ADMIN · SALES_REP · SALES_MANAGER · FINANCE</td></tr>
+            <tr><td class="mono">CustomerTier</td><td class="mono">BRONZE · SILVER · GOLD</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <code>CustomerTier</code> drives the default discount ceiling a customer is entitled
+        to. It is stored now but not yet consumed — the discount risk engine will use it.
+      </p>
+    </section>
+
+    <section id="frontend">
+      <h2>Frontend setup <a class="anchor" href="#frontend">#</a></h2>
+      <p class="section-intro">
+        Set <code>VITE_API_URL=http://localhost:3000</code> in <code>client/.env</code>. Vite
+        reads env only at startup, so restart the dev server after creating that file.
+      </p>
+
+      <h3>Attach the token automatically</h3>
+      <div class="code">
+        <div class="code__label">client/src/api/client.js</div>
+        <button class="copy" type="button">Copy</button>
+<pre><code>apiClient.interceptors.request.use((config) =&gt; {
+  const token = localStorage.getItem('df360_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});</code></pre>
+      </div>
+
+      <h3>Handle 401 globally, leave 403 to the screen</h3>
+      <div class="code">
+        <button class="copy" type="button">Copy</button>
+<pre><code>apiClient.interceptors.response.use(
+  (res) =&gt; res,
+  (error) =&gt; {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('df360_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);</code></pre>
+      </div>
+
+      <h3>Unwrap the envelope once</h3>
+      <p>So screens deal in payloads rather than <code>res.data.data</code>.</p>
+      <div class="code">
+        <button class="copy" type="button">Copy</button>
+<pre><code>export const login = async (credentials) =&gt; {
+  const res = await apiClient.post('/api/internal/auth/login', credentials);
+  return res.data.data; // -&gt; { user, token }
+};</code></pre>
+      </div>
+
+      <h3>Reading errors</h3>
+      <p>
+        The server message is always at <code>error.response.data.message</code> and is safe
+        to display. Field errors are at <code>error.response.data.errors</code>.
+      </p>
+
+      <div class="note">
+        <div class="note__title">Rule of thumb</div>
+        <p>
+          Hide actions a user's role cannot perform, but treat that as cosmetic. Every rule is
+          enforced server-side — the frontend renders decisions, it does not make them.
+        </p>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <h2>Roadmap <a class="anchor" href="#roadmap">#</a></h2>
+      <p class="section-intro">
+        Build order. Each slice adds its own section above as it lands.
+      </p>
+
+      <ul class="roadmap">
+        <li class="done">
+          <span class="step">✓</span>
+          <span><strong>Auth &amp; RBAC</strong><span class="what">Register, login, session, role guards, audience-separated tokens</span></span>
+        </li>
+        <li class="done">
+          <span class="step">✓</span>
+          <span><strong>Products &amp; customers</strong><span class="what">Catalog CRUD with margin, soft delete, tiered customers</span></span>
+        </li>
+        <li><span class="step">03</span><span><strong>Quotations</strong><span class="what">Builder, lines, live margin</span></span></li>
+        <li><span class="step">04</span><span><strong>Discount risk &amp; approvals</strong><span class="what">Blended risk score, manager → finance chain, audit trail</span></span></li>
+        <li><span class="step">05</span><span><strong>Upsell &amp; cross-sell</strong><span class="what">Ranked suggestions with margin delta</span></span></li>
+        <li><span class="step">06</span><span><strong>Fulfillment split</strong><span class="what">Cost-scored allocation across warehouses, reservations, backorders</span></span></li>
+        <li><span class="step">07</span><span><strong>Subscriptions &amp; billing</strong><span class="what">Hybrid one-time plus recurring, proration</span></span></li>
+        <li><span class="step">08</span><span><strong>Customer portal</strong><span class="what">Portal login, negotiation, automatic re-approval on changed terms</span></span></li>
+        <li><span class="step">09</span><span><strong>Deal health &amp; reporting</strong><span class="what">Stalled deals, discount anomalies, filtered reports</span></span></li>
+      </ul>
+    </section>
+
+    <footer>
+      DealFlow360 · Sales operations backend. Endpoint shapes on this page were verified
+      against the running API, not written from intent.
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // Copy buttons — the one real convenience a developer wants from a doc page.
+  document.querySelectorAll('.copy').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const block = button.closest('.code').querySelector('code');
+      try {
+        await navigator.clipboard.writeText(block.innerText);
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand('copy');
+        sel.removeAllRanges();
+      }
+      button.textContent = 'Copied';
+      button.dataset.done = '1';
+      setTimeout(() => {
+        button.textContent = 'Copy';
+        delete button.dataset.done;
+      }, 1400);
+    });
+  });
+
+  // Scrollspy: mark the section currently in view.
+  const links = [...document.querySelectorAll('.rail a')];
+  const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+  const sections = [...document.querySelectorAll('section[id]')];
+
+  const spy = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        links.forEach((a) => a.classList.remove('is-active'));
+        byId.get(entry.target.id)?.classList.add('is-active');
+      });
+    },
+    { rootMargin: '-10% 0px -75% 0px' }
+  );
+
+  sections.forEach((section) => spy.observe(section));
+</script>
+
+</body>
+</html>

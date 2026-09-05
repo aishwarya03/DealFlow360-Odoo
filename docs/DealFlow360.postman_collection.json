@@ -1,0 +1,692 @@
+{
+  "info": {
+    "name": "DealFlow360 API",
+    "description": "Sales operations backend. Log in once under Auth and every other request is authorised automatically — the login requests save their token into the {{token}} collection variable.\n\nSeeded accounts all use the password Password123:\n- admin@dealflow360.com (ADMIN)\n- rep@dealflow360.com (SALES_REP)\n- manager@dealflow360.com (SALES_MANAGER)\n- finance@dealflow360.com (FINANCE)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "role", "value": "", "type": "string" },
+    { "key": "productId", "value": "1", "type": "string" },
+    { "key": "customerId", "value": "1", "type": "string" },
+    { "key": "warehouseId", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Ping",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/ping", "host": ["{{baseUrl}}"], "path": ["api", "ping"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login as ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('logged in', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('token', body.data.token);",
+                  "    pm.collectionVariables.set('role', body.data.user.role);",
+                  "    console.log('Token saved. Acting as ' + body.data.user.role);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@dealflow360.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "login"]
+            },
+            "description": "Run this first. Saves the token into {{token}} so every other request is authorised."
+          }
+        },
+        {
+          "name": "Login as SALES_REP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('logged in', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('token', body.data.token);",
+                  "    pm.collectionVariables.set('role', body.data.user.role);",
+                  "    console.log('Token saved. Acting as ' + body.data.user.role);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rep@dealflow360.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "login"]
+            },
+            "description": "Switch to a rep to see role gates reject writes that admins are allowed."
+          }
+        },
+        {
+          "name": "Login — wrong password (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rep@dealflow360.com\",\n  \"password\": \"wrongpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "login"]
+            },
+            "description": "Returns the same message as an unknown email, so the endpoint cannot be used to discover which emails have accounts."
+          }
+        },
+        {
+          "name": "Register a new user",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Manager\",\n  \"email\": \"newmanager@dealflow360.com\",\n  \"password\": \"Password123\",\n  \"role\": \"SALES_MANAGER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "register"]
+            },
+            "description": "Run twice to see the 409 duplicate-email response."
+          }
+        },
+        {
+          "name": "Current user (/me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "me"]
+            },
+            "description": "Confirms the saved token works. 401 here means the token is missing or expired."
+          }
+        },
+        {
+          "name": "Role gate probe (admin only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/auth/admin-only",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "auth", "admin-only"]
+            },
+            "description": "200 as ADMIN, 403 as anyone else. Temporary route — it will be removed once real admin routes exist."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"]
+            },
+            "description": "Any signed-in staff member can read the catalog. Inactive products are excluded."
+          }
+        },
+        {
+          "name": "List — filter by category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products?category=SERVICE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"],
+              "query": [{ "key": "category", "value": "SERVICE" }]
+            },
+            "description": "HARDWARE | SOFTWARE | SERVICE. Anything else returns 422."
+          }
+        },
+        {
+          "name": "List — subscribable only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products?isSubscribable=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"],
+              "query": [{ "key": "isSubscribable", "value": "true" }]
+            },
+            "description": "Products that MAY be sold on a recurring plan. Category and billing mode are independent axes."
+          }
+        },
+        {
+          "name": "List — search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products?search=laptop",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"],
+              "query": [{ "key": "search", "value": "laptop" }]
+            },
+            "description": "Case-insensitive match on name or SKU."
+          }
+        },
+        {
+          "name": "List — include inactive",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products?includeInactive=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"],
+              "query": [{ "key": "includeInactive", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "Get one product",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products", "{{productId}}"]
+            },
+            "description": "Try id 9999 for a 404, or 'abc' for a 400."
+          }
+        },
+        {
+          "name": "Create product (ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('productId', body.data.product.id);",
+                  "    console.log('productId set to ' + body.data.product.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"HW-MONITOR-27\",\n  \"name\": \"27\\\" 4K Monitor\",\n  \"description\": \"Colour-accurate desktop display\",\n  \"category\": \"HARDWARE\",\n  \"unit\": \"unit\",\n  \"isSubscribable\": false,\n  \"listPrice\": 32000,\n  \"costPrice\": 21000,\n  \"taxRate\": 18\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"]
+            },
+            "description": "Admin only — 403 as a rep. Saves the new id into {{productId}}. SKU is uppercased automatically."
+          }
+        },
+        {
+          "name": "Create product — cost above list (422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"BAD-MARGIN\",\n  \"name\": \"Loss Maker\",\n  \"category\": \"HARDWARE\",\n  \"listPrice\": 100,\n  \"costPrice\": 500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products"]
+            },
+            "description": "Selling below cost is rejected, so no quotation can be built on a product with negative margin at list price."
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"listPrice\": 29500\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products", "{{productId}}"]
+            },
+            "description": "Partial update. marginPercent is recomputed in the response. An empty body returns 422."
+          }
+        },
+        {
+          "name": "Deactivate product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "products", "{{productId}}"]
+            },
+            "description": "Soft delete — sets isActive false. The row survives so historical quotation lines stay readable."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "List customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers"]
+            }
+          }
+        },
+        {
+          "name": "List — filter by tier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers?tier=GOLD",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers"],
+              "query": [{ "key": "tier", "value": "GOLD" }]
+            },
+            "description": "BRONZE | SILVER | GOLD. Tier sets the customer's default discount ceiling."
+          }
+        },
+        {
+          "name": "Get one customer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers/{{customerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers", "{{customerId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create customer (rep or admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('customerId', body.data.customer.id);",
+                  "    console.log('customerId set to ' + body.data.customer.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Delta Systems\",\n  \"email\": \"buyer@delta.com\",\n  \"tier\": \"SILVER\",\n  \"contactName\": \"Priya N\",\n  \"phone\": \"+91 98765 43210\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers"]
+            },
+            "description": "Reps and managers may create customers — that is sales work, not backend configuration. FINANCE gets 403. Email is lowercased automatically."
+          }
+        },
+        {
+          "name": "Update customer",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"tier\": \"GOLD\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers/{{customerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers", "{{customerId}}"]
+            },
+            "description": "Promoting a tier raises the discount ceiling this customer is entitled to."
+          }
+        },
+        {
+          "name": "Deactivate customer (ADMIN)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/customers/{{customerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "customers", "{{customerId}}"]
+            },
+            "description": "Admin only — 403 as a rep."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Warehouses",
+      "item": [
+        {
+          "name": "List warehouses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "warehouses"]
+            },
+            "description": "Ordered cheapest-dispatch first, priority as tie-break — the order the fulfillment split will consider them in."
+          }
+        },
+        {
+          "name": "Get one warehouse",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/warehouses/{{warehouseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "warehouses", "{{warehouseId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create warehouse (ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) {",
+                  "    pm.collectionVariables.set('warehouseId', body.data.warehouse.id);",
+                  "    console.log('warehouseId set to ' + body.data.warehouse.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WEST\",\n  \"name\": \"West Depot\",\n  \"city\": \"Mumbai\",\n  \"shippingCostPerShipment\": 320,\n  \"priority\": 40\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/warehouses",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "warehouses"]
+            },
+            "description": "Admin only. shippingCostPerShipment is the fixed cost of one dispatch from here — the number the split algorithm scores against. Code is uppercased automatically."
+          }
+        },
+        {
+          "name": "Update warehouse",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"shippingCostPerShipment\": 275\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/warehouses/{{warehouseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "warehouses", "{{warehouseId}}"]
+            },
+            "description": "Lowering the dispatch cost changes where the split will prefer to draw stock from."
+          }
+        },
+        {
+          "name": "Deactivate warehouse",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/warehouses/{{warehouseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "warehouses", "{{warehouseId}}"]
+            },
+            "description": "Refused with 400 if the warehouse still holds stock — try warehouse 1 to see it. Hiding a location that physically contains goods turns a reporting problem into a lost-inventory problem."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Availability across warehouses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/availability/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "availability", "1"]
+            },
+            "description": "The question the fulfillment split asks. Product 1 (laptop) sits 6/4/2 across three warehouses, so an order for 10 cannot be filled from one location."
+          }
+        },
+        {
+          "name": "List all stock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory"]
+            },
+            "description": "Filters: warehouseId, productId, lowStock=true, inStockOnly=true."
+          }
+        },
+        {
+          "name": "List stock — one warehouse",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory?warehouseId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory"],
+              "query": [{ "key": "warehouseId", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Low stock worklist",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/low-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "low-stock"]
+            },
+            "description": "Everything at or below its reorder point, worst first. Compares against AVAILABLE, not on-hand — stock already promised to someone else cannot save you."
+          }
+        },
+        {
+          "name": "Stock movements ledger",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/movements?productId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "movements"],
+              "query": [{ "key": "productId", "value": "1" }]
+            },
+            "description": "Append-only history of every stock change: type, signed delta, reason, and who did it. Run an adjustment first, then come back here."
+          }
+        },
+        {
+          "name": "Set stock level (ADMIN/FINANCE)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": 3,\n  \"productId\": 2,\n  \"onHandQty\": 12,\n  \"reorderPoint\": 5,\n  \"reorderQty\": 20,\n  \"reason\": \"Initial load\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory"]
+            },
+            "description": "Absolute set — 'this location now holds exactly N'. Use for a stocktake result or loading a new product into a warehouse."
+          }
+        },
+        {
+          "name": "Adjust stock — receive delivery",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": 1,\n  \"productId\": 1,\n  \"delta\": 10,\n  \"reason\": \"Delivery GRN-4471\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "adjust"]
+            },
+            "description": "Signed change. Separate from set because 'add 20' and 'make it 20' are different operations. Reason is REQUIRED — an unexplained correction is what makes inventory untrustworthy."
+          }
+        },
+        {
+          "name": "Adjust stock — write off damage",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": 1,\n  \"productId\": 1,\n  \"delta\": -2,\n  \"reason\": \"Damaged in transit\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "Adjust — more than on hand (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": 1,\n  \"productId\": 1,\n  \"delta\": -999,\n  \"reason\": \"Stocktake write-off\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "adjust"]
+            },
+            "description": "Stock cannot go negative."
+          }
+        },
+        {
+          "name": "Adjust — no reason (422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": 1,\n  \"productId\": 1,\n  \"delta\": -5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/internal/inventory/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "internal", "inventory", "adjust"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
