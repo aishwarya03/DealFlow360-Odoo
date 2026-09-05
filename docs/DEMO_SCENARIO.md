@@ -68,16 +68,18 @@ Currency: **INR only.** Multi-currency is a bonus in the brief; single currency 
 | HRMS / payroll integration | 35,000 |
 | User training (per batch) | 8,000 |
 
-### Subscriptions — recurring
+### Recurring lines — `category: SOFTWARE`, `isSubscribable: true`
 
-| Plan | Cycle | Price (₹) |
-|---|---|---|
-| Cloud video storage (per camera) | Monthly | 450 |
-| AI analytics — people counting / ANPR (per camera) | Monthly | 600 |
-| ZKBioTime Cloud attendance (per 100 employees) | Monthly | 2,400 |
-| AMC comprehensive (per device) | Yearly | 2,800 |
+> **Schema note:** the real `Product.category` enum is `HARDWARE | SOFTWARE | SERVICE` — there is no `SUBSCRIPTION` category (see `SOURCE_OF_TRUTH.md` §2.3). These are `SOFTWARE`-category products with `isSubscribable = true`; the cycle below is what gets chosen on the `QuotationLine` when a rep actually sells it, not a fixed property of the catalog item. AMC is the exception — it's a maintenance `SERVICE`, also `isSubscribable`, billed yearly.
 
-**Every product needs a `cost` value seeded** — margin is required by three features (live margin indicator, upsell margin delta, minimum-margin thresholds) and is absent from the brief's product form.
+| Plan | Category | Cycle | Price (₹) |
+|---|---|---|---|
+| Cloud video storage (per camera) | Software | Monthly | 450 |
+| AI analytics — people counting / ANPR (per camera) | Software | Monthly | 600 |
+| ZKBioTime Cloud attendance (per 100 employees) | Software | Monthly | 2,400 |
+| AMC comprehensive (per device) | Service | Yearly | 2,800 |
+
+**Every product needs a `costPrice` value seeded** — margin is required by three features (live margin indicator, upsell margin delta, minimum-margin thresholds) and is absent from the brief's product form. Field is already in the real schema (`Product.costPrice`); just needs seed data.
 
 ---
 

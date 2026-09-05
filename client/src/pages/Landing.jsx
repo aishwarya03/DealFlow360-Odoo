@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 
 import Button from '../components/Button';
-import ClientLogo from '../components/ClientLogo';
 import LifecycleRing from '../components/LifecycleRing';
 import Reveal from '../components/Reveal';
+import SiteFooter from '../components/SiteFooter';
+import SiteHeader from '../components/SiteHeader';
+import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 
 /*
  * This is Netrix Systems' own public site — the fictional demo tenant from
@@ -90,25 +92,12 @@ const stages = [
   },
 ];
 
-const Landing = () => (
+const Landing = () => {
+  useBrandTag(NETRIX_TAG.title, NETRIX_TAG.icon);
+
+  return (
   <div className="min-h-screen bg-white">
-    <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/85 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-        <ClientLogo />
-        <div className="flex items-center gap-2">
-          <Link to="/login">
-            <Button variant="ghost" size="sm">
-              Staff Login
-            </Button>
-          </Link>
-          <Link to="/portal/login">
-            <Button variant="secondary" size="sm">
-              Customer Login
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </header>
+    <SiteHeader />
 
     <section className="relative overflow-hidden border-b border-slate-200">
       <div
@@ -132,12 +121,12 @@ const Landing = () => (
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <a href="#contact">
+          <Link to="/request-quote">
             <Button size="lg">
               Request a Quote
               <ArrowRight className="size-4" aria-hidden="true" />
             </Button>
-          </a>
+          </Link>
           <Link to="/portal/login">
             <Button size="lg" variant="secondary">
               Customer Login
@@ -228,30 +217,18 @@ const Landing = () => (
           </h3>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
             Tell us what you need secured and we&apos;ll schedule a site
-            survey — sales@netrixsystems.example
+            survey.
           </p>
-          <a href="mailto:sales@netrixsystems.example" className="mt-4 inline-block">
+          <Link to="/request-quote" className="mt-4 inline-block">
             <Button>Request a Quote</Button>
-          </a>
+          </Link>
         </div>
       </Reveal>
     </section>
 
-    <footer className="border-t border-slate-200 bg-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8">
-        <div>
-          <ClientLogo />
-          <p className="mt-1.5 text-xs text-slate-500">Bengaluru, Karnataka</p>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          <Link to="/login" className="hover:text-slate-600">
-            Staff Login
-          </Link>
-          <span>Powered by DealFlow360</span>
-        </div>
-      </div>
-    </footer>
+    <SiteFooter />
   </div>
-);
+  );
+};
 
 export default Landing;
