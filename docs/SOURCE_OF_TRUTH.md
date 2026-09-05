@@ -758,20 +758,33 @@ GET/POST/PATCH         /api/internal/inventory
 **Not yet built:**
 
 ```
-GET    /api/internal/quotations                    ?status=&repId=&customerId=
-POST   /api/internal/quotations                     { customerId, lines }  OR  { sourceQuotationId, lines }
-                                                     — the second form is "Create New Quotation" from inside an
-                                                     existing quotation's screen (§1.6): customerId is inherited,
-                                                     not supplied, and only source status REJECTED/WITHDRAWN
-                                                     may be used (enforced in the service, not the DB)
-GET    /api/internal/quotations/:id
-PATCH  /api/internal/quotations/:id/lines           (add/edit/remove — bumps termsVersion, re-evaluates §3)
-POST   /api/internal/quotations/:id/submit          (DRAFT -> PENDING_APPROVAL | CONFIRMED)
+GET    /api/internal/quotations                    ?status=&customerId=&ownerId=  [BUILT]
+POST   /api/internal/quotations                     { customerId, lines }  OR  { sourceQuotationId, lines? }
+                                                     [BUILT] — the second form is "Create New Quotation" from
+                                                     inside an existing quotation's screen (§1.6): customerId
+                                                     is inherited, not supplied; lines omitted copies the
+                                                     source's; only a REJECTED/WITHDRAWN source is accepted,
+                                                     and a source that already has a child is rejected (409)
+GET    /api/internal/quotations/:id                 [BUILT]
+PATCH  /api/internal/quotations/:id/lines           [BUILT] (add/edit/remove — only while DRAFT or
+                                                     UNDER_NEGOTIATION; bumps termsVersion; if UNDER_NEGOTIATION,
+                                                     immediately re-evaluates and re-routes per §3/§4)
+POST   /api/internal/quotations/:id/submit          [BUILT] (DRAFT -> PENDING_APPROVAL | CONFIRMED)
+POST   /api/internal/quotations/:id/confirm         [BUILT, not in original sketch] { note? } — records a
+                                                     customer's acceptance; internal-triggered until the portal
+                                                     exists (§1.6), same service call the portal will use later
+POST   /api/internal/quotations/:id/withdraw        [BUILT, not in original sketch] { note? } — records a
+                                                     customer's decline, same internal-triggered reasoning
 GET    /api/internal/quotations/:id/upsell-suggestions
 
-GET    /api/internal/approvals                      ?status=pending
-GET    /api/internal/approvals/:approvalRequestId
-POST   /api/internal/approvals/:approvalRequestId/steps/:stepId/act   { action: APPROVE|REJECT|RETURN, note }
+GET    /api/internal/approvals                      ?status=  [BUILT] (scoped to the caller's own role's
+                                                     ACTIVE steps — Manager and Finance each see only their own
+                                                     turn; Admin sees everything)
+GET    /api/internal/approvals/:id                  [BUILT]
+POST   /api/internal/approvals/:id/steps/:stepId/act   { action: APPROVE|REJECT|RETURN, note }  [BUILT] — note
+                                                     is required for REJECT/RETURN, optional for APPROVE; only
+                                                     the currently-ACTIVE step accepts an action, and only from
+                                                     the matching role (or ADMIN)
 
 GET    /api/internal/quotations/:id/fulfillment-suggestion   (computed, not stored)
 POST   /api/internal/quotations/:id/fulfillment     { splits: [...] }   (accept suggested or manual override)
@@ -848,7 +861,9 @@ Tracked here so they don't get silently decided twice by two different sessions.
 - [x] ~~Portal auth mechanism~~ — **resolved by the built schema**: `Customer.passwordHash`, email + password, no magic link, no separate `PortalUser`. See §2.2.
 - [x] ~~Discount governance schema~~ — **built, differently than originally sketched**: `CustomerTier`/`DiscountRule`/`ApprovalLevel` replace `RiskBand`/`ApprovalRoutingRule`/the two ceiling tables. See §2.4, §3, §6a.
 - [x] ~~Quotation/Approval core schema~~ — **built** (`quotation_lifecycle_core` migration, 2026-09-05). See §2.5–2.6, §2.10.
-- [ ] `evaluateDiscount()` is not yet wired to anything that persists a `Quotation`/`ApprovalRequest` — the service layer/state-machine code (submit, approve/reject/return, confirm, withdraw, requote) is the next slice, not built yet.
+- [x] ~~Quotation/approval workflow service layer~~ — **built and end-to-end tested** 2026-09-05: `modules/quotations/` (create incl. requote, list, get, edit lines, submit, confirm, withdraw) and `modules/approvals/` (list my queue, act on step). Verified against live seed data: compliant auto-confirm, a breach routing to `MANAGER_FINANCE`, role-gated step actions, manager-approve → finance-active handoff, finance-reject → `Quotation.REJECTED`, a full `previousQuotationId` requote chain, and both requote guardrails (no double child, no requoting a live quotation). `Quotation.termsVersion`/`AuditLog` confirmed populating correctly throughout.
+- [ ] Portal auth + customer-triggered `/confirm`/`/withdraw`/negotiation — the internal `/confirm` and `/withdraw` endpoints exist now as a stand-in (a rep records what the customer decided), same service functions a real portal will call later.
+- [ ] 4 test quotations (ids 1–4, customer "Beta Industries") exist in the shared dev DB from this verification pass — harmless, but flagging since it's shared with your teammate. Ask if you want them cleared before further testing.
 - [ ] `CustomerTier.financeEscalationSeverity` thresholds (currently 3/4/5/6 for Bronze/Silver/Gold/Platinum, §3.2) — seeded placeholders, tune once demo seed data is loaded and the demo quote's numbers can be checked by hand.
 - [ ] **Seed data does not match `DEMO_SCENARIO.md`** — see §6a's seed-data note. Needs reconciling (Netrix/ZKTeco catalog, 3 tiers not 4) before rehearsing the demo.
 - [ ] Feed `Quotation` confirmation into `Customer.totalPurchaseValue`/`completedOrders`/`lastOrderAt` (§2.2) so tier scores become real once orders exist, instead of only reflecting seeded values.
