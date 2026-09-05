@@ -4,6 +4,7 @@ import {
   FileText,
   HeartPulse,
   LayoutDashboard,
+  MessageCircle,
   Package,
   Receipt,
   Repeat,
@@ -69,6 +70,17 @@ export const NAV_ITEMS = [
     path: '/workspace/quotations',
     icon: FileText,
     roles: ['ADMIN', 'SALES_REP', 'SALES_MANAGER', 'FINANCE'],
+    status: 'live',
+    group: 'Workspace',
+  },
+  {
+    key: 'chat',
+    label: 'Chat Inbox',
+    path: '/workspace/chat',
+    icon: MessageCircle,
+    // Same population that owns quotations (§6) — Finance/Admin have no
+    // customer chat to pick up.
+    roles: ['SALES_REP', 'SALES_MANAGER'],
     status: 'live',
     group: 'Workspace',
   },

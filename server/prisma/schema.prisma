@@ -127,9 +127,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  quotationsOwned   Quotation[]    @relation("QuotationOwner")
+  quotationsOwned   Quotation[]       @relation("QuotationOwner")
   approvalStepsDone ApprovalStep[]
   auditEntries      AuditLog[]
+  chatParticipation ChatParticipant[]
+  chatMessages      ChatMessage[]
 
   @@map("users")
 }
@@ -166,7 +168,9 @@ model Customer {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  quotations Quotation[]
+  quotations        Quotation[]
+  chatConversations ChatConversation[]
+  chatMessages      ChatMessage[]
 
   @@index([tierId])
   @@map("customers")
@@ -460,6 +464,7 @@ model Quotation {
   lines            QuotationLine[]
   approvalRequests ApprovalRequest[]
   auditLog         AuditLog[]
+  chatConversation ChatConversation?
 
   @@index([customerId])
   @@index([ownerId])
@@ -583,4 +588,72 @@ model AuditLog {
 
   @@index([quotationId, createdAt])
   @@map("audit_logs")
+}
+
+// ── Chat ────────────────────────────────────────────────────────────────
+
+enum ChatConversationStatus {
+  PENDING // created while no rep was online — sits in the claim queue
+  ACTIVE // a rep has claimed it
+  CLOSED
+}
+
+enum ChatSenderType {
+  CUSTOMER
+  USER
+  SYSTEM // "X added Y to the chat" style notices
+}
+
+// One conversation per quotation — same "one deal, one owner" shape as
+// Quotation.ownerId, so "chat about this deal" has a single obvious home
+// instead of a new thread every visit.
+model ChatConversation {
+  id          Int                    @id @default(autoincrement())
+  quotationId Int                    @unique
+  quotation   Quotation              @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  customerId  Int
+  customer    Customer               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status      ChatConversationStatus @default(PENDING)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+
+  @@index([status])
+  @@map("chat_conversations")
+}
+
+// The assigned rep plus any collaborators (other reps/managers) pulled in
+// later. A rep must be a row here to read or post into the conversation.
+model ChatParticipant {
+  id             Int              @id @default(autoincrement())
+  conversationId Int
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         Int
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addedAt        DateTime         @default(now())
+
+  @@unique([conversationId, userId])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id             Int              @id @default(autoincrement())
+  conversationId Int
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType     ChatSenderType
+
+  // Exactly one of these is set, matching senderType — never both, and
+  // neither for a SYSTEM message.
+  senderUserId     Int?
+  senderUser       User?     @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
+  senderCustomerId Int?
+  senderCustomer   Customer? @relation(fields: [senderCustomerId], references: [id], onDelete: SetNull)
+
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
 }

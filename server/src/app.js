@@ -9,6 +9,8 @@ import notFound from './middleware/notFound.js';
 import approvalRoutes from './modules/approvals/approval.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import categoryRoutes from './modules/categories/category.routes.js';
+import chatRoutes from './modules/chat/chat.routes.js';
+import chatPortalRoutes from './modules/chat/chat.portal.routes.js';
 import customerRoutes from './modules/customers/customer.routes.js';
 import discountRoutes from './modules/discounts/discount.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
@@ -49,7 +51,9 @@ app.use('/api/internal/warehouses', warehouseRoutes);
 app.use('/api/internal/inventory', inventoryRoutes);
 app.use('/api/internal/quotations', quotationRoutes);
 app.use('/api/internal/approvals', approvalRoutes);
+app.use('/api/internal/chat', chatRoutes);
 app.use('/api/portal', portalRoutes);
+app.use('/api/portal', chatPortalRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

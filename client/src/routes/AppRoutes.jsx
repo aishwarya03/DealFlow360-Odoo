@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import AppShell from '../layouts/AppShell';
 import ApprovalsPage from '../pages/app/ApprovalsPage';
+import ChatInboxPage from '../pages/app/ChatInboxPage';
 import ComingSoon from '../pages/app/ComingSoon';
 import CustomersPage from '../pages/app/CustomersPage';
 import Dashboard from '../pages/app/Dashboard';
@@ -85,6 +86,7 @@ const AppRoutes = () => {
 
           <Route path="quotations" element={<QuotationsPage />} />
           <Route path="quotations/:id" element={<QuotationDetailPage />} />
+          <Route path="chat" element={<ChatInboxPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="fulfillment" element={<ComingSoon title="Fulfillment" />} />
           <Route path="subscriptions" element={<ComingSoon title="Subscriptions" />} />

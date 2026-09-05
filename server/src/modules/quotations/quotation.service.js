@@ -89,6 +89,9 @@ const toPublicQuotation = (quotation) => ({
   lastActivityAt: quotation.lastActivityAt,
   createdAt: quotation.createdAt,
   updatedAt: quotation.updatedAt,
+  chatConversation: quotation.chatConversation
+    ? { id: quotation.chatConversation.id, status: quotation.chatConversation.status }
+    : null,
   lines: quotation.lines ? quotation.lines.map(toPublicLine) : undefined,
   totals: quotation.lines ? computeTotals(quotation.lines) : undefined,
   approvalRequests: quotation.approvalRequests
@@ -124,6 +127,7 @@ const detailInclude = {
   customer: { select: { id: true, name: true, tierId: true } },
   owner: { select: { id: true, name: true } },
   supersededBy: { select: { id: true } },
+  chatConversation: { select: { id: true, status: true } },
   lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
   approvalRequests: {
     orderBy: { createdAt: 'asc' },

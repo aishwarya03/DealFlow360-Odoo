@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { getMyQuotation } from '../api/portal';
+import { listMyChatMessages, startChat } from '../api/chat';
+import { getMyQuotation, getPortalToken } from '../api/portal';
+import Button from '../components/Button';
+import ChatPanel from '../components/ChatPanel';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
@@ -44,6 +47,9 @@ const QuotationDetail = () => {
 
   const [quotation, setQuotation] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [chat, setChat] = useState(null); // { id, status }
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [noOneAvailable, setNoOneAvailable] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -52,6 +58,19 @@ const QuotationDetail = () => {
       .catch(() => toast.error('Could not load this quotation'))
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  const openChat = async () => {
+    setIsStartingChat(true);
+    try {
+      const { conversation, noOneAvailable: none } = await startChat(id);
+      setChat(conversation);
+      setNoOneAvailable(none);
+    } catch {
+      toast.error('Could not start the chat');
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -83,7 +102,44 @@ const QuotationDetail = () => {
               >
                 {STATUS_LABEL[quotation.status] ?? quotation.status}
               </span>
+
+              {!chat && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={isStartingChat}
+                  onClick={openChat}
+                >
+                  <MessageCircle className="size-4" aria-hidden="true" />
+                  Chat with our sales team
+                </Button>
+              )}
             </div>
+
+            {chat && noOneAvailable && chat.status === 'PENDING' && (
+              <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                No one is available right now — send a message and we'll get back to you.
+              </p>
+            )}
+
+            {chat && (
+              <div className="fixed bottom-6 right-6 z-50">
+                <ChatPanel
+                  conversationId={chat.id}
+                  audience="portal"
+                  token={getPortalToken()}
+                  fetchHistory={listMyChatMessages}
+                  isMine={(message) => message.senderType === 'CUSTOMER'}
+                  onAssigned={() => {
+                    setChat((prev) => ({ ...prev, status: 'ACTIVE' }));
+                    setNoOneAvailable(false);
+                    toast.success('A sales rep has joined the chat');
+                  }}
+                  onClose={() => setChat(null)}
+                />
+              </div>
+            )}
 
             <div className="mt-8 grid grid-cols-1 gap-6 rounded-lg border border-slate-200 p-6 sm:grid-cols-2">
               <Field label="Date">{formatDate(quotation.createdAt)}</Field>

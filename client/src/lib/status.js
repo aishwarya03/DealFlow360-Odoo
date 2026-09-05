@@ -76,6 +76,10 @@ export const STATUS = {
   STALLED: { label: 'Stalled', tone: 'warning' },
   SLIPPAGE: { label: 'Delivery Slippage', tone: 'warning' },
   ANOMALY: { label: 'Discount Anomaly', tone: 'danger' },
+
+  // Chat conversation (ACTIVE reuses the subscription entry above)
+  PENDING: { label: 'Waiting for a rep', tone: 'warning' },
+  CLOSED: { label: 'Closed', tone: 'neutral' },
 };
 
 /** Falls back to a neutral badge so an unmapped state degrades instead of crashing. */
