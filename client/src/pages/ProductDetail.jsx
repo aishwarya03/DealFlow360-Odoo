@@ -4,10 +4,12 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, ArrowUpRight, Minus, Package, Plus, ShoppingCart } from 'lucide-react';
 
 import Button from '../components/Button';
+import ProductSuggestions from '../components/ProductSuggestions';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { CATEGORY_ICONS, CATEGORY_LABELS } from '../data/catalog';
 import { getPublicProduct } from '../api/products';
+import { toCartItem } from '../lib/cartItem';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 import { useCart } from '../hooks/useCart';
 import { formatPrice } from '../lib/currency';
@@ -165,6 +167,17 @@ const ProductDetail = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {product && (
+          <ProductSuggestions
+            productIds={[product.id]}
+            className="mt-14 border-t border-slate-100 pt-10"
+            onAdd={(suggested) => {
+              addItem(toCartItem(suggested), 1);
+              toast.success(`Added ${suggested.name} to your quote cart`);
+            }}
+          />
         )}
       </main>
 

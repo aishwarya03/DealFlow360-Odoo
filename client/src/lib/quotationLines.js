@@ -11,16 +11,60 @@ export const searchProducts = async (query) => {
   }));
 };
 
+// Normalizes any allocation shape (a fresh suggestion from
+// GET .../allocation-suggestion, or the {warehouseId, warehouse, quantity}
+// rows a saved QuotationLine already carries) into one shape the split
+// editor renders: warehouseId null means the backorder row.
+export const normalizeAllocations = (rows) =>
+  (rows ?? []).map((row) => ({
+    warehouseId: row.warehouseId ?? null,
+    warehouseCode: row.warehouseCode ?? row.warehouse?.code ?? null,
+    warehouseName: row.warehouseName ?? row.warehouse?.name ?? 'Backorder',
+    quantity: row.quantity,
+  }));
+
+// A product is only split across warehouses if it's actually stocked —
+// services/combos never get an allocation editor (mirrors the server's
+// buildLineData, which skips allocation entirely for non-GOODS products).
+export const isStockedProductType = (productType) => productType === 'GOODS';
+
 export const emptyLine = () => ({
   productId: '',
   productLabel: '',
   productListPrice: undefined,
   productTaxRate: undefined,
   productIsSubscribable: false,
+  productType: undefined,
   quantity: 1,
   discountPercent: 0,
   isRecurring: false,
   recurringCycle: '',
+  suggestedAs: null,
+  suggestedFromProductId: null,
+  // undefined = not yet fetched; [] once a suggestion/save has resolved it.
+  allocations: undefined,
+});
+
+// Seeds an editable row straight from a suggestion returned by
+// GET .../product-recommendations/suggest (see QuotationSuggestions) — the
+// rep accepted an upsell/cross-sell card, so the resulting line carries that
+// attribution. The server independently re-verifies this pairing is a real,
+// active recommendation before trusting it (quotation.service.js's
+// assertSuggestionProvenance); this is just what pre-fills the row.
+export const lineFromSuggestion = (suggestion) => ({
+  productId: String(suggestion.product.id),
+  productLabel: `${suggestion.product.sku} — ${suggestion.product.name}`,
+  productListPrice: suggestion.product.listPrice,
+  productTaxRate: suggestion.product.taxRate,
+  productIsSubscribable: suggestion.product.isSubscribable,
+  productType: suggestion.product.productType,
+  quantity: 1,
+  discountPercent: 0,
+  isRecurring: false,
+  recurringCycle: '',
+  suggestedAs: suggestion.type,
+  suggestedFromProductId: suggestion.triggeredBy.id,
+  allocations: undefined,
 });
 
 // Seeds an editable row from a real QuotationLine (requote pre-fill, or
@@ -37,8 +81,17 @@ export const lineFromExisting = (line) => ({
   productListPrice: line.unitPrice,
   productTaxRate: line.taxRateAtEntry,
   productIsSubscribable: line.isRecurring,
+  // Not carried on the line itself — inferred from whether it has any
+  // allocation rows at all (a SERVICE/COMBO line never gets any, see
+  // buildLineData server-side). Good enough to decide whether to render the
+  // split editor for an already-saved line; a manually re-picked product
+  // gets the real value from selectProduct instead.
+  productType: line.allocations && line.allocations.length > 0 ? 'GOODS' : undefined,
   quantity: line.quantity,
   discountPercent: line.discountPercent,
   isRecurring: line.isRecurring,
   recurringCycle: line.recurringCycle ?? '',
+  suggestedAs: line.suggestedAs ?? null,
+  suggestedFromProductId: line.suggestedFromProductId ?? null,
+  allocations: line.allocations ? normalizeAllocations(line.allocations) : undefined,
 });

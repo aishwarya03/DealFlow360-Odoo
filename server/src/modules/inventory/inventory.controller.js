@@ -13,6 +13,13 @@ export const availability = async (req, res) => {
   sendSuccess(res, 'Availability', result);
 };
 
+export const allocationSuggestion = async (req, res) => {
+  const { productId, quantity } = req.validatedQuery;
+  const allocations = await inventoryService.computeAllocation(productId, quantity);
+
+  sendSuccess(res, 'Suggested allocation', { allocations });
+};
+
 export const lowStock = async (req, res) => {
   const stock = await inventoryService.getLowStock();
 

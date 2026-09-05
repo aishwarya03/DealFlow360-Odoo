@@ -1,16 +1,25 @@
 import { Trash2 } from 'lucide-react';
 
-import { searchProducts } from '../lib/quotationLines';
+import { isStockedProductType, searchProducts } from '../lib/quotationLines';
 import { formatINR } from '../lib/currency';
 import Input from './Input';
 import SearchSelect from './SearchSelect';
+import WarehouseSplitEditor from './WarehouseSplitEditor';
 
 const selectClass =
   'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none transition-colors focus:border-brand-600';
 
 // The repeating product/qty/discount/recurring row, shared by the new-
 // quotation form and the edit-lines modal so the two never drift apart.
-const QuotationLineRows = ({ lines, onUpdateLine, onSelectProduct, onRemoveLine }) => (
+const QuotationLineRows = ({
+  lines,
+  onUpdateLine,
+  onSelectProduct,
+  onRemoveLine,
+  warehouses = [],
+  onAutoSplit,
+  refreshingIndexes,
+}) => (
   <div className="space-y-3">
     {lines.map((line, index) => (
       <div key={index} className="grid grid-cols-12 items-start gap-2 rounded-md border border-slate-200 p-3">
@@ -95,6 +104,17 @@ const QuotationLineRows = ({ lines, onUpdateLine, onSelectProduct, onRemoveLine 
             </button>
           )}
         </div>
+
+        {line.productId && isStockedProductType(line.productType) && (
+          <WarehouseSplitEditor
+            allocations={line.allocations ?? []}
+            warehouses={warehouses}
+            quantity={Number(line.quantity) || 0}
+            onChange={(allocations) => onUpdateLine(index, { allocations })}
+            onAutoSplit={() => onAutoSplit(index)}
+            isRefreshing={refreshingIndexes?.has(index)}
+          />
+        )}
       </div>
     ))}
   </div>

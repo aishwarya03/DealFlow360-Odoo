@@ -216,6 +216,21 @@ const PRODUCTS = [
 // Main is the cheapest to dispatch from and holds most stock. East is pricier but
 // carries the overflow — so an order for 10 laptops cannot be filled from one
 // location and the split algorithm has a real decision to make.
+// [source sku, target sku, type, promoted] — a small, defensible starter set
+// grounded in how a real CCTV rollout actually pairs up: cameras need PoE
+// power, an NVR needs storage, installs lead to an AMC contract, and an
+// analog camera upgrades to an IP one.
+const PRODUCT_RECOMMENDATIONS = [
+  ['CAM-IP-DOME-4MP', 'SWITCH-POE-16', 'CROSS_SELL', false],
+  ['CAM-IP-BULLET-4MP', 'SWITCH-POE-16', 'CROSS_SELL', false],
+  ['NVR-16CH-4K', 'HDD-SURV-4TB', 'CROSS_SELL', false],
+  ['SWITCH-POE-16', 'UPS-CCTV-1KVA', 'CROSS_SELL', false],
+  ['CAM-IP-DOME-4MP', 'SVC-CCTV-INSTALL', 'CROSS_SELL', true],
+  ['SVC-CCTV-INSTALL', 'SVC-CCTV-AMC', 'CROSS_SELL', true],
+  ['CAM-ANALOG-2MP', 'CAM-IP-DOME-4MP', 'UPSELL', false],
+  ['DVR-8CH-5MP', 'NVR-16CH-4K', 'UPSELL', false],
+];
+
 const WAREHOUSES = [
   { code: 'MAIN', name: 'Main Warehouse', city: 'Bengaluru', shippingCostPerShipment: 250, priority: 10 },
   { code: 'EAST', name: 'East Depot', city: 'Kolkata', shippingCostPerShipment: 400, priority: 20 },
@@ -317,15 +332,17 @@ const main = async () => {
     }
   }
 
+  const productIdBySku = {};
   for (const { categoryPath, ...product } of PRODUCTS) {
     const categoryId = categoryIdByPath[categoryPath];
     if (!categoryId) throw new Error(`Unknown categoryPath "${categoryPath}" for ${product.sku}`);
 
-    await prisma.product.upsert({
+    const row = await prisma.product.upsert({
       where: { sku: product.sku },
       update: { ...product, categoryId },
       create: { ...product, categoryId },
     });
+    productIdBySku[product.sku] = row.id;
     console.log(`  product   ${product.productType.padEnd(8)} ${product.sku.padEnd(18)} ${product.name}`);
   }
 
@@ -333,6 +350,21 @@ const main = async () => {
     where: { sku: { notIn: PRODUCTS.map((product) => product.sku) } },
     data: { isActive: false },
   });
+
+  for (const [sourceSku, targetSku, type, promoted] of PRODUCT_RECOMMENDATIONS) {
+    const sourceProductId = productIdBySku[sourceSku];
+    const targetProductId = productIdBySku[targetSku];
+    if (!sourceProductId || !targetProductId) {
+      throw new Error(`Unknown SKU in PRODUCT_RECOMMENDATIONS: ${sourceSku} -> ${targetSku}`);
+    }
+
+    await prisma.productRecommendation.upsert({
+      where: { sourceProductId_targetProductId_type: { sourceProductId, targetProductId, type } },
+      update: { promoted, isActive: true },
+      create: { sourceProductId, targetProductId, type, promoted },
+    });
+    console.log(`  recommend ${type.padEnd(10)} ${sourceSku.padEnd(18)} -> ${targetSku}`);
+  }
 
   for (const [tierCode, categoryPath, max] of DISCOUNT_RULES) {
     const customerTierId = tierIdByCode[tierCode];

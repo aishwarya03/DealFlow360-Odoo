@@ -251,10 +251,73 @@ model Product {
   updatedAt DateTime @updatedAt
 
   inventory      Inventory[]
-  quotationLines QuotationLine[]
+  quotationLines QuotationLine[] @relation("QuotationLineProduct")
+
+  // Catalog-configured upsell/cross-sell pairings, evaluated against
+  // whatever's currently in an order's lines — see ProductRecommendation.
+  recommendationsAsSource ProductRecommendation[] @relation("RecommendationSource")
+  recommendationsAsTarget ProductRecommendation[] @relation("RecommendationTarget")
+
+  // Lines added by accepting a suggestion that named this product as the
+  // trigger — attribution only, see QuotationLine.suggestedFromProduct.
+  suggestedInLines QuotationLine[] @relation("SuggestedFromProduct")
 
   @@index([categoryId])
   @@map("products")
+}
+
+// Upsell = a better/bigger version of what's already in the line.
+// Cross-sell = a complementary but different product bought alongside.
+// One table, not two: the shape is identical either way and `type` is the
+// only thing that differs — it lets one query answer "give me everything
+// for this product" while the API still groups results into the two
+// logical lists the UI shows separately.
+enum RecommendationType {
+  UPSELL
+  CROSS_SELL
+}
+
+// Admin-curated catalog config, evaluated against whatever's currently in
+// an order's lines (a quotation or the public cart) to produce suggestions.
+// Purely advisory: accepting a suggestion just adds a normal line/cart item
+// through the ordinary add-line path — nothing here ever adds anything by
+// itself. Only ever shown while the order is actually editable (a
+// quotation's own DRAFT/UNDER_NEGOTIATION gate already covers this, since
+// accepting a suggestion is just that same add-line path).
+model ProductRecommendation {
+  id Int @id @default(autoincrement())
+
+  sourceProductId Int // the product already in the order line
+  source          Product @relation("RecommendationSource", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProductId Int // the product being suggested
+  target          Product @relation("RecommendationTarget", fields: [targetProductId], references: [id], onDelete: Cascade)
+
+  type RecommendationType
+
+  // Admin-highlighted — e.g. "AI analytics + AMC" called out as a featured
+  // pairing rather than left to sort next to every other suggestion.
+  promoted Boolean @default(false)
+
+  // Don't surface this pairing if the TARGET's live margin has eroded below
+  // this — stops the engine recommending something that still pairs well
+  // but isn't worth the rep's time anymore. 0 = no threshold.
+  minMarginPercent Decimal @default(0) @db.Decimal(5, 2)
+
+  // Deactivate, not delete — consistent with every other admin-configured
+  // table in this schema (DiscountRule, CustomerTier, Product, Customer,
+  // Warehouse). Nothing downstream references this row the way a
+  // QuotationLine references a Product, so a hard delete would technically
+  // be safe, but breaking the house convention in exactly one place buys
+  // nothing.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // A pair may exist at most once per type — not prevented from being both
+  // an UPSELL and a CROSS_SELL row simultaneously (conceivable, if unusual),
+  // just never duplicated within the same type.
+  @@unique([sourceProductId, targetProductId, type])
+  @@index([sourceProductId, type])
+  @@map("product_recommendations")
 }
 
 // A stocking location. The spec's fulfillment split has to "minimise the number of
@@ -279,8 +342,9 @@ model Warehouse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  inventory Inventory[]
-  movements StockMovement[]
+  inventory   Inventory[]
+  movements   StockMovement[]
+  allocations QuotationLineAllocation[]
 
   @@map("warehouses")
 }
@@ -475,7 +539,7 @@ model QuotationLine {
   quotationId Int
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   productId   Int
-  product     Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product     Product   @relation("QuotationLineProduct", fields: [productId], references: [id], onDelete: Restrict)
 
   quantity Int
 
@@ -494,9 +558,53 @@ model QuotationLine {
   isRecurring    Boolean         @default(false)
   recurringCycle RecurringCycle?
 
+  // Set only when this line was added by accepting an upsell/cross-sell
+  // suggestion — both null for a line picked directly, always set together
+  // for one that wasn't (enforced in the service layer, not here — same
+  // idiom as "recurringCycle required when isRecurring"). suggestedFromProductId
+  // is the OTHER product already on the order that triggered the suggestion.
+  // Deliberately a live FK to Product, not a snapshot: Product is never
+  // hard-deleted (isActive soft-delete only, same as every reference to it
+  // elsewhere in this schema), so this is safe, and unlike unitPrice/
+  // ceilingAtEntry this is attribution, not a priced fact that must survive
+  // catalog changes untouched. onDelete: SetNull — this line stays fully
+  // valid on its own even if that attribution link is ever cleared.
+  suggestedAs            RecommendationType?
+  suggestedFromProductId Int?
+  suggestedFromProduct   Product?            @relation("SuggestedFromProduct", fields: [suggestedFromProductId], references: [id], onDelete: SetNull)
+
+  // How this line's quantity is expected to be sourced across warehouses,
+  // decided when the line is added (not deferred to a post-confirmation
+  // fulfillment step) — see QuotationLineAllocation.
+  allocations QuotationLineAllocation[]
+
   @@index([quotationId])
   @@index([productId])
   @@map("quotation_lines")
+}
+
+// One row per warehouse a QuotationLine's quantity is expected to be drawn
+// from, chosen at add-time (auto-suggested by a greedy largest-available-
+// first split, editable by the rep) rather than computed fresh after
+// confirmation. warehouseId is null for a backorder row — the remainder no
+// warehouse can currently cover. Rows are replaced wholesale whenever the
+// line's quantity changes, never partially patched.
+//
+// This only records intent while the quotation is still editable: no
+// Inventory.reservedQty is touched here. Real reservation happens once, at
+// the transition into CONFIRMED, which replays these rows into actual
+// StockMovement(RESERVATION) entries — see quotation.service.js's
+// reserveStockForQuotation.
+model QuotationLineAllocation {
+  id              Int           @id @default(autoincrement())
+  quotationLineId Int
+  quotationLine   QuotationLine @relation(fields: [quotationLineId], references: [id], onDelete: Cascade)
+  warehouseId     Int?
+  warehouse       Warehouse?    @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  quantity        Int
+
+  @@index([quotationLineId])
+  @@map("quotation_line_allocations")
 }
 
 // Promoted from the APPROVAL_LEVEL constant in discountEvaluation.service.js

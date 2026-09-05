@@ -7,6 +7,7 @@ import ConfigModal from '../../components/ConfigModal';
 import DataTable from '../../components/DataTable';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
+import ProductRecommendationsPanel from '../../components/ProductRecommendationsPanel';
 import { useAuth } from '../../hooks/useAuth';
 import { listProducts, createProduct, deactivateProduct, updateProduct, uploadProductImage } from '../../api/products';
 import { listCategories } from '../../api/categories';
@@ -208,6 +209,14 @@ const ProductsPage = () => {
             <Input label="Product image" name="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageFile(event.target.files[0])} />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.isSubscribable} onChange={change('isSubscribable')} /> Subscribable product</label>
+
+          {editing.id ? (
+            <ProductRecommendationsPanel productId={editing.id} />
+          ) : (
+            <p className="border-t border-slate-100 pt-4 text-xs text-slate-400">
+              Save this product first to configure cross-sell and upsell recommendations.
+            </p>
+          )}
         </ConfigModal>
       )}
 

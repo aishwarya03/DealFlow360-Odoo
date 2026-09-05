@@ -11,9 +11,21 @@ const QUOTATION_STATUSES = [
 ];
 
 const RECURRING_CYCLES = ['MONTHLY', 'QUARTERLY', 'YEARLY'];
+const RECOMMENDATION_TYPES = ['UPSELL', 'CROSS_SELL'];
 
 const percent = (label) =>
   z.number({ message: `${label} must be a number` }).min(0).max(100, `${label} cannot exceed 100`);
+
+// One warehouse's (or, for a null warehouseId, the backorder remainder's)
+// share of a line's quantity. Optional on input — omitted, the server
+// computes its own greedy suggestion (see quotation.service.js's
+// buildLineData); provided, it's the rep's accepted-or-edited split, still
+// re-checked against live stock before it's trusted (inventory.service.js's
+// resolveAllocations).
+const allocationInputSchema = z.object({
+  warehouseId: z.number().int().positive().nullable(),
+  quantity: z.number().int().positive('Allocation quantity must be at least 1'),
+});
 
 const newLineSchema = z
   .object({
@@ -22,10 +34,20 @@ const newLineSchema = z
     discountPercent: percent('discountPercent').default(0),
     isRecurring: z.boolean().default(false),
     recurringCycle: z.enum(RECURRING_CYCLES).optional(),
+    allocations: z.array(allocationInputSchema).optional(),
+    // Set together, only when this line was added by accepting a suggestion
+    // — see quotation.service.js's buildLineData for the server-side check
+    // that this wasn't just asserted by the client.
+    suggestedAs: z.enum(RECOMMENDATION_TYPES).optional(),
+    suggestedFromProductId: z.number().int().positive().optional(),
   })
   .refine((data) => !data.isRecurring || data.recurringCycle, {
     message: 'recurringCycle is required when isRecurring is true',
     path: ['recurringCycle'],
+  })
+  .refine((data) => Boolean(data.suggestedAs) === Boolean(data.suggestedFromProductId), {
+    message: 'suggestedAs and suggestedFromProductId must be provided together',
+    path: ['suggestedFromProductId'],
   });
 
 // Either a fresh quotation (customerId + lines) or a requote (sourceQuotationId,
@@ -61,6 +83,7 @@ export const updateLinesSchema = z
           discountPercent: percent('discountPercent').optional(),
           isRecurring: z.boolean().optional(),
           recurringCycle: z.enum(RECURRING_CYCLES).nullable().optional(),
+          allocations: z.array(allocationInputSchema).optional(),
         })
       )
       .optional(),

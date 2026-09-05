@@ -224,6 +224,89 @@ export const getMovements = async ({ warehouseId, productId, limit = 50 }) => {
   }));
 };
 
+// Greedy split for one product/quantity: largest-available warehouse first,
+// tie-broken on Warehouse.priority (lower wins) — the exact rule
+// docs/SOURCE_OF_TRUTH.md §7 names for the fulfillment algorithm. Reused
+// here so quote-time suggestion and any later replay use the same rule,
+// rather than two independent implementations drifting apart.
+export const computeAllocation = async (productId, quantity) => {
+  const rows = await prisma.inventory.findMany({
+    where: { productId, warehouse: { isActive: true } },
+    include: { warehouse: { select: { id: true, code: true, name: true, priority: true } } },
+  });
+
+  const candidates = rows
+    .map((row) => ({
+      warehouseId: row.warehouseId,
+      warehouseCode: row.warehouse.code,
+      warehouseName: row.warehouse.name,
+      available: row.onHandQty - row.reservedQty,
+      priority: row.warehouse.priority,
+    }))
+    .filter((candidate) => candidate.available > 0)
+    .sort((a, b) => b.available - a.available || a.priority - b.priority);
+
+  let remaining = quantity;
+  const allocations = [];
+
+  for (const candidate of candidates) {
+    if (remaining <= 0) break;
+    const take = Math.min(candidate.available, remaining);
+    allocations.push({
+      warehouseId: candidate.warehouseId,
+      warehouseCode: candidate.warehouseCode,
+      warehouseName: candidate.warehouseName,
+      quantity: take,
+    });
+    remaining -= take;
+  }
+
+  // No warehouse (or combination of warehouses) can fully cover this line —
+  // the remainder is an explicit backorder row, not a silently short split.
+  if (remaining > 0) {
+    allocations.push({ warehouseId: null, warehouseCode: null, warehouseName: 'Backorder', quantity: remaining });
+  }
+
+  return allocations;
+};
+
+// A rep's own override is trusted only as far as stock actually supports it:
+// quantities must add up to the line, and no non-backorder row may exceed
+// what's really available right now. Omitting `requested` just takes the
+// computed suggestion as-is — same shape either way.
+export const resolveAllocations = async (productId, quantity, requested) => {
+  if (!requested || requested.length === 0) {
+    const suggestion = await computeAllocation(productId, quantity);
+    return suggestion.map(({ warehouseId, quantity: qty }) => ({ warehouseId, quantity: qty }));
+  }
+
+  const sum = requested.reduce((total, row) => total + row.quantity, 0);
+  if (sum !== quantity) {
+    throw ApiError.badRequest(
+      `Warehouse allocation totals ${sum}, but the line quantity is ${quantity} — they must match`,
+      [{ field: 'allocations', message: 'Allocated quantities must add up to the line quantity' }]
+    );
+  }
+
+  for (const row of requested) {
+    if (row.warehouseId == null) continue; // backorder row — no stock to check
+
+    const inventory = await prisma.inventory.findUnique({
+      where: { warehouseId_productId: { warehouseId: row.warehouseId, productId } },
+    });
+    const available = inventory ? inventory.onHandQty - inventory.reservedQty : 0;
+
+    if (row.quantity > available) {
+      throw ApiError.badRequest(
+        `Only ${available} available for this product in warehouse ${row.warehouseId}, cannot allocate ${row.quantity}`,
+        [{ field: 'allocations', message: 'Allocation exceeds available stock' }]
+      );
+    }
+  }
+
+  return requested.map(({ warehouseId, quantity: qty }) => ({ warehouseId: warehouseId ?? null, quantity: qty }));
+};
+
 // Everything at or below its reorder point, worst first — the restocking worklist.
 export const getLowStock = async () => {
   const rows = await prisma.inventory.findMany({

@@ -1,13 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Minus, Package, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
+import ProductSuggestions from '../components/ProductSuggestions';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { useCart } from '../hooks/useCart';
 import { CATEGORY_ICONS } from '../data/catalog';
 import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
+import { toCartItem } from '../lib/cartItem';
 import { formatINR, formatPrice } from '../lib/currency';
 
 const CYCLE_LABEL = { month: 'Monthly total', year: 'Yearly total' };
@@ -15,7 +18,7 @@ const CYCLE_LABEL = { month: 'Monthly total', year: 'Yearly total' };
 const Cart = () => {
   useBrandTag(`Your Quote Cart · ${NETRIX_TAG.title}`, NETRIX_TAG.icon);
   const navigate = useNavigate();
-  const { items, updateQuantity, removeItem, clearCart } = useCart();
+  const { items, addItem, updateQuantity, removeItem, clearCart } = useCart();
 
   const totals = items.reduce((acc, item) => {
     const key = item.cycle ?? 'oneTime';
@@ -114,6 +117,15 @@ const Cart = () => {
                 );
               })}
             </div>
+
+            <ProductSuggestions
+              productIds={items.map((item) => item.id)}
+              className="mt-10"
+              onAdd={(suggested) => {
+                addItem(toCartItem(suggested), 1);
+                toast.success(`Added ${suggested.name} to your quote cart`);
+              }}
+            />
 
             <div className="mt-6 flex items-start justify-between gap-6">
               <button

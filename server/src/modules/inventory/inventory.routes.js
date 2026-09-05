@@ -7,6 +7,7 @@ import validate, { validateQuery } from '../../middleware/validate.js';
 import * as inventoryController from './inventory.controller.js';
 import {
   adjustStockSchema,
+  allocationSuggestionSchema,
   listStockSchema,
   setStockSchema,
 } from './inventory.validator.js';
@@ -24,6 +25,11 @@ router.use(authenticateInternal);
 router.get('/', validateQuery(listStockSchema), inventoryController.list);
 router.get('/low-stock', inventoryController.lowStock);
 router.get('/movements', validateQuery(listStockSchema), inventoryController.movements);
+router.get(
+  '/allocation-suggestion',
+  validateQuery(allocationSuggestionSchema),
+  inventoryController.allocationSuggestion
+);
 
 // Declared after /low-stock and /movements so those literal paths are not
 // swallowed by the parameterised route.

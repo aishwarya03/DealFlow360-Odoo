@@ -218,7 +218,7 @@ enum RecurringCycle {
 }
 ```
 
-`UpsellRule` (A2/A6, pairing-based upsell) is still not built — unaffected by the category rework, revisit when that slice starts.
+**Built.** Superseding the `UpsellRule` name above: the actual model is `ProductRecommendation` (source product → target product, `type: UPSELL | CROSS_SELL`, `promoted`, `minMarginPercent`), evaluated by `recommendation.service.js`'s `getSuggestions(productIds)` against whatever's currently in an order. See §5 for the real endpoints (not the `/quotations/:id/upsell-suggestions` shape originally sketched) and §2.5 for `QuotationLine.suggestedAs`/`suggestedFromProductId` (attribution only, server-reverified on every add — never trusted from the client as-is). UI: product pages + cart (client, public suggestions, no margin) and the quotation line editor + Products admin form (internal, staff suggestions with margin, and the only place recommendation pairs are configured).
 
 ### 2.4 Discount governance (A3 / Section 10)
 
@@ -775,7 +775,11 @@ POST   /api/internal/quotations/:id/confirm         [BUILT, not in original sket
                                                      exists (§1.6), same service call the portal will use later
 POST   /api/internal/quotations/:id/withdraw        [BUILT, not in original sketch] { note? } — records a
                                                      customer's decline, same internal-triggered reasoning
-GET    /api/internal/quotations/:id/upsell-suggestions
+GET    /api/internal/product-recommendations/suggest        ?productIds=1,2,3  [BUILT] — margin included
+GET    /api/public/product-recommendations/suggest           ?productIds=1,2,3  [BUILT] — no auth, margin stripped
+GET/POST/PATCH/DELETE  /api/internal/product-recommendations  [BUILT] — catalog config; write is ADMIN-only,
+                                                     read is open to all staff (a rep needs it live while
+                                                     building a quotation, same reasoning as discount policy)
 
 GET    /api/internal/approvals                      ?status=  [BUILT] (scoped to the caller's own role's
                                                      ACTIVE steps — Manager and Finance each see only their own

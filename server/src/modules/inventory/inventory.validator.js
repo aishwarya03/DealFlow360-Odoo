@@ -37,6 +37,13 @@ export const adjustStockSchema = z.object({
     .max(200),
 });
 
+// Preview for the add-to-quotation flow: "if I add N of this product, how
+// would it split across warehouses right now?"
+export const allocationSuggestionSchema = z.object({
+  productId: z.coerce.number().int().positive('productId is required'),
+  quantity: z.coerce.number().int().positive('quantity must be at least 1'),
+});
+
 export const listStockSchema = z.object({
   warehouseId: z.coerce.number().int().positive().optional(),
   productId: z.coerce.number().int().positive().optional(),
