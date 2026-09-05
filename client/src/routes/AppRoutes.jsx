@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import AppShell from '../layouts/AppShell';
 import ApprovalsPage from '../pages/app/ApprovalsPage';
+import ChatInboxPage from '../pages/app/ChatInboxPage';
 import ComingSoon from '../pages/app/ComingSoon';
 import CustomersPage from '../pages/app/CustomersPage';
 import Dashboard from '../pages/app/Dashboard';
@@ -9,6 +10,8 @@ import InventoryPage from '../pages/app/InventoryPage';
 import ProductsPage from '../pages/app/ProductsPage';
 import QuotationDetailPage from '../pages/app/QuotationDetailPage';
 import QuotationsPage from '../pages/app/QuotationsPage';
+import SubscriptionsPage from '../pages/app/SubscriptionsPage';
+import SubscriptionDetailPage from '../pages/app/SubscriptionDetailPage';
 import WarehousesPage from '../pages/app/WarehousesPage';
 import About from '../pages/About';
 import Cart from '../pages/Cart';
@@ -21,6 +24,8 @@ import Login from '../pages/Login';
 import PortalLogin from '../pages/PortalLogin';
 import MyQuotations from '../pages/MyQuotations';
 import QuotationDetail from '../pages/QuotationDetail';
+import MySubscriptions from '../pages/MySubscriptions';
+import SubscriptionDetail from '../pages/SubscriptionDetail';
 import NotFound from '../pages/NotFound';
 import ProtectedRoute from '../components/ProtectedRoute';
 import PortalProtectedRoute from '../components/PortalProtectedRoute';
@@ -60,6 +65,22 @@ const AppRoutes = () => {
             </PortalProtectedRoute>
           }
         />
+        <Route
+          path="/portal/subscriptions"
+          element={
+            <PortalProtectedRoute>
+              <MySubscriptions />
+            </PortalProtectedRoute>
+          }
+        />
+        <Route
+          path="/portal/subscriptions/:id"
+          element={
+            <PortalProtectedRoute>
+              <SubscriptionDetail />
+            </PortalProtectedRoute>
+          }
+        />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/about" element={<About />} />
@@ -85,9 +106,11 @@ const AppRoutes = () => {
 
           <Route path="quotations" element={<QuotationsPage />} />
           <Route path="quotations/:id" element={<QuotationDetailPage />} />
+          <Route path="chat" element={<ChatInboxPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="fulfillment" element={<ComingSoon title="Fulfillment" />} />
-          <Route path="subscriptions" element={<ComingSoon title="Subscriptions" />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="subscriptions/:id" element={<SubscriptionDetailPage />} />
           <Route path="invoices" element={<ComingSoon title="Invoices" />} />
           <Route path="deal-health" element={<ComingSoon title="Deal Health" />} />
           <Route path="reports" element={<ComingSoon title="Reports" />} />

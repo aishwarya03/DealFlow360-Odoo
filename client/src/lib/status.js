@@ -66,6 +66,8 @@ export const STATUS = {
   ACTIVE: { label: 'Active', tone: 'success' },
   PAUSED: { label: 'Paused', tone: 'neutral' },
   CANCELLED: { label: 'Cancelled', tone: 'neutral' },
+  PENDING_RENEWAL_APPROVAL: { label: 'Awaiting your approval', tone: 'warning' },
+  PAST_DUE: { label: 'Past Due', tone: 'danger' },
 
   // Invoice
   PAID: { label: 'Paid', tone: 'success' },
@@ -76,6 +78,10 @@ export const STATUS = {
   STALLED: { label: 'Stalled', tone: 'warning' },
   SLIPPAGE: { label: 'Delivery Slippage', tone: 'warning' },
   ANOMALY: { label: 'Discount Anomaly', tone: 'danger' },
+
+  // Chat conversation (ACTIVE reuses the subscription entry above)
+  PENDING: { label: 'Waiting for a rep', tone: 'warning' },
+  CLOSED: { label: 'Closed', tone: 'neutral' },
 };
 
 /** Falls back to a neutral badge so an unmapped state degrades instead of crashing. */

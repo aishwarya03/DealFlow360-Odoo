@@ -24,7 +24,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { cn } from '../lib/cn';
 
 const ALL = 'all';
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 const Products = () => {
   useBrandTag(`Products & Services · ${NETRIX_TAG.title}`, NETRIX_TAG.icon);

@@ -4,6 +4,7 @@ import {
   FileText,
   HeartPulse,
   LayoutDashboard,
+  MessageCircle,
   Package,
   Receipt,
   Repeat,
@@ -73,6 +74,17 @@ export const NAV_ITEMS = [
     group: 'Workspace',
   },
   {
+    key: 'chat',
+    label: 'Chat Inbox',
+    path: '/workspace/chat',
+    icon: MessageCircle,
+    // Same population that owns quotations (§6) — Finance/Admin have no
+    // customer chat to pick up.
+    roles: ['SALES_REP', 'SALES_MANAGER'],
+    status: 'live',
+    group: 'Workspace',
+  },
+  {
     key: 'approvals',
     label: 'Approvals',
     path: '/workspace/approvals',
@@ -96,8 +108,8 @@ export const NAV_ITEMS = [
     label: 'Subscriptions',
     path: '/workspace/subscriptions',
     icon: Repeat,
-    roles: ['ADMIN', 'FINANCE'],
-    status: 'soon',
+    roles: ['ADMIN', 'SALES_REP', 'SALES_MANAGER', 'FINANCE'],
+    status: 'live',
     group: 'Workspace',
   },
   {

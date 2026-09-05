@@ -77,3 +77,71 @@ export const getMyQuotation = async (id) => {
   });
   return data.data.quotation;
 };
+
+const portalAuth = () => ({ headers: { Authorization: `Bearer ${getPortalToken()}` } });
+
+export const listMySubscriptions = async () => {
+  const { data } = await apiClient.get('/api/portal/subscriptions', portalAuth());
+  return data.data.subscriptions;
+};
+
+export const getMySubscription = async (id) => {
+  const { data } = await apiClient.get(`/api/portal/subscriptions/${id}`, portalAuth());
+  return data.data.subscription;
+};
+
+export const previewMyQuantityChange = async (id, quantity) => {
+  const { data } = await apiClient.post(
+    `/api/portal/subscriptions/${id}/quantity-change/preview`,
+    { quantity },
+    portalAuth()
+  );
+  return data.data.preview;
+};
+
+export const applyMyQuantityChange = async (id, quantity, note) => {
+  const { data } = await apiClient.post(
+    `/api/portal/subscriptions/${id}/quantity-change`,
+    { quantity, note },
+    portalAuth()
+  );
+  return data.data.subscription;
+};
+
+export const previewMyPlanChange = async (id, cycle) => {
+  const { data } = await apiClient.post(
+    `/api/portal/subscriptions/${id}/plan-change/preview`,
+    { cycle },
+    portalAuth()
+  );
+  return data.data.preview;
+};
+
+export const applyMyPlanChange = async (id, cycle, note) => {
+  const { data } = await apiClient.post(`/api/portal/subscriptions/${id}/plan-change`, { cycle, note }, portalAuth());
+  return data.data.subscription;
+};
+
+export const previewMyCancel = async (id, mode) => {
+  const { data } = await apiClient.post(`/api/portal/subscriptions/${id}/cancel/preview`, { mode }, portalAuth());
+  return data.data.preview;
+};
+
+export const cancelMySubscription = async (id, mode, note) => {
+  const { data } = await apiClient.post(`/api/portal/subscriptions/${id}/cancel`, { mode, note }, portalAuth());
+  return data.data.subscription;
+};
+
+export const approveRenewalInvoice = async (id, invoiceId) => {
+  const { data } = await apiClient.post(`/api/portal/subscriptions/${id}/invoices/${invoiceId}/approve`, {}, portalAuth());
+  return data.data.subscription;
+};
+
+export const rejectRenewalInvoice = async (id, invoiceId, note) => {
+  const { data } = await apiClient.post(
+    `/api/portal/subscriptions/${id}/invoices/${invoiceId}/reject`,
+    { note },
+    portalAuth()
+  );
+  return data.data.subscription;
+};

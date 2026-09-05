@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { CheckCircle2, Package, Trash2 } from 'lucide-react';
+import { CheckCircle2, MessageCircle, Package, Trash2 } from 'lucide-react';
 
-import { registerAndRequestQuote, registerCustomer, requestQuoteAsCustomer } from '../api/portal';
+import { listMyChatMessages, startChat } from '../api/chat';
+import { getPortalToken, registerAndRequestQuote, registerCustomer, requestQuoteAsCustomer } from '../api/portal';
 import Button from '../components/Button';
+import ChatPanel from '../components/ChatPanel';
 import Input from '../components/Input';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
@@ -57,6 +59,10 @@ const RequestQuote = () => {
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null);
+  const [chat, setChat] = useState(null); // { id, status }
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [noOneAvailable, setNoOneAvailable] = useState(false);
+  const [chatError, setChatError] = useState('');
 
   // Shared across the site (see SiteHeader) so a login elsewhere is already
   // reflected here, and vice versa.
@@ -88,7 +94,12 @@ const RequestQuote = () => {
     setSubmitting(true);
 
     try {
-      const lines = items.map((i) => ({ productId: i.id, quantity: i.quantity }));
+      const lines = items.map((i) => ({
+        productId: i.id,
+        quantity: i.quantity,
+        isRecurring: i.isRecurring ?? false,
+        recurringCycle: i.isRecurring ? i.recurringCycle : undefined,
+      }));
 
       let result;
       if (customer) {
@@ -137,6 +148,21 @@ const RequestQuote = () => {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openChat = async () => {
+    if (!submitted?.quotation) return;
+    setIsStartingChat(true);
+    setChatError('');
+    try {
+      const { conversation, noOneAvailable: none } = await startChat(submitted.quotation.id);
+      setChat(conversation);
+      setNoOneAvailable(none);
+    } catch {
+      setChatError('Could not start the chat right now — please try again shortly.');
+    } finally {
+      setIsStartingChat(false);
     }
   };
 
@@ -192,6 +218,44 @@ const RequestQuote = () => {
               Signed in as {submitted.customer.email}.
               {submitted.quotation && ' Final pricing is confirmed after a site survey.'}
             </p>
+
+            {submitted.quotation && !chat && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-5"
+                disabled={isStartingChat}
+                onClick={openChat}
+              >
+                <MessageCircle className="size-4" aria-hidden="true" />
+                Chat with our sales team
+              </Button>
+            )}
+
+            {chatError && <p className="mt-3 text-sm text-red-600">{chatError}</p>}
+
+            {chat && noOneAvailable && chat.status === 'PENDING' && (
+              <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                No one is available right now — send a message and we'll get back to you.
+              </p>
+            )}
+
+            {chat && (
+              <div className="fixed bottom-6 right-6 z-50 text-left">
+                <ChatPanel
+                  conversationId={chat.id}
+                  audience="portal"
+                  token={getPortalToken()}
+                  fetchHistory={listMyChatMessages}
+                  isMine={(message) => message.senderType === 'CUSTOMER'}
+                  onAssigned={() => {
+                    setChat((prev) => ({ ...prev, status: 'ACTIVE' }));
+                    setNoOneAvailable(false);
+                  }}
+                  onClose={() => setChat(null)}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <>

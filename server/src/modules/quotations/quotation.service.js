@@ -5,6 +5,7 @@ import { evaluateDiscount } from '../discounts/discountEvaluation.service.js';
 import { getApplicableDiscountRule } from '../discounts/discountRule.service.js';
 import { resolveAllocations } from '../inventory/inventory.service.js';
 import { findActiveRecommendation } from '../recommendations/recommendation.service.js';
+import { createSubscriptionsForQuotation } from '../subscriptions/subscription.service.js';
 import { writeAudit } from './auditLog.service.js';
 
 // Statuses in which a rep sees the quotation on their own desk, still shaping
@@ -109,6 +110,9 @@ const toPublicQuotation = (quotation) => ({
   lastActivityAt: quotation.lastActivityAt,
   createdAt: quotation.createdAt,
   updatedAt: quotation.updatedAt,
+  chatConversation: quotation.chatConversation
+    ? { id: quotation.chatConversation.id, status: quotation.chatConversation.status }
+    : null,
   lines: quotation.lines ? quotation.lines.map(toPublicLine) : undefined,
   totals: quotation.lines ? computeTotals(quotation.lines) : undefined,
   approvalRequests: quotation.approvalRequests
@@ -151,6 +155,7 @@ const detailInclude = {
       allocations: { include: { warehouse: { select: { id: true, code: true, name: true } } } },
     },
   },
+  chatConversation: { select: { id: true, status: true } },
   approvalRequests: {
     orderBy: { createdAt: 'asc' },
     include: {
@@ -260,6 +265,24 @@ export const buildLineData = async (tierId, input, siblingProductIds = []) => {
     });
   }
 
+  // A recurring line is priced from the product's configured plan for that
+  // cycle (ProductSubscriptionPlan), not its one-time listPrice — the whole
+  // point of the plan config is that monthly/quarterly/yearly can carry
+  // different amounts. Missing/inactive plan is a business error, same as a
+  // missing discount rule below: fail loudly rather than fall back silently.
+  let unitPrice = toNumber(product.listPrice);
+  if (input.isRecurring) {
+    const plan = await prisma.productSubscriptionPlan.findUnique({
+      where: { productId_cycle: { productId: product.id, cycle: input.recurringCycle } },
+    });
+    if (!plan || !plan.isActive) {
+      throw ApiError.badRequest(`No active ${input.recurringCycle} plan configured for ${product.sku}`, [
+        { field: 'recurringCycle', message: `${product.name} has no ${input.recurringCycle} plan configured` },
+      ]);
+    }
+    unitPrice = toNumber(plan.amount);
+  }
+
   // Throws if no DiscountRule governs this tier + category anywhere up the
   // tree — a missing rule is a business error, never a silent allowance.
   const rule = await getApplicableDiscountRule(tierId, product.categoryId);
@@ -273,7 +296,7 @@ export const buildLineData = async (tierId, input, siblingProductIds = []) => {
   return {
     productId: product.id,
     quantity: input.quantity,
-    unitPrice: toNumber(product.listPrice),
+    unitPrice,
     discountPercent: input.discountPercent ?? 0,
     ceilingAtEntry: rule.maxDiscountPercent,
     taxRateAtEntry: toNumber(product.taxRate),
@@ -562,6 +585,7 @@ const routeQuotation = async (quotation, actingUser, auditAction) => {
         },
       });
       await writeAudit(tx, { quotationId: quotation.id, userId: actingUser.id, action: 'AUTO_CONFIRMED' });
+      await createSubscriptionsForQuotation(tx, quotation);
       return;
     }
 
@@ -618,7 +642,10 @@ export const submitQuotation = async (quotationId, actingUser) => {
 // Records a customer decision a rep learned about outside the system (no
 // portal yet — see the CUSTOMER_DECISION_STATUSES comment above).
 const recordCustomerDecision = async (quotationId, actingUser, note, targetStatus, auditAction) => {
-  const quotation = await prisma.quotation.findUnique({ where: { id: quotationId } });
+  const quotation = await prisma.quotation.findUnique({
+    where: { id: quotationId },
+    include: targetStatus === 'CONFIRMED' ? { lines: true } : undefined,
+  });
   if (!quotation) throw ApiError.notFound(`No quotation with id ${quotationId}`);
   if (!CUSTOMER_DECISION_STATUSES.includes(quotation.status)) {
     throw ApiError.badRequest(`Cannot record this decision while the quotation is ${quotation.status}`);
@@ -630,6 +657,9 @@ const recordCustomerDecision = async (quotationId, actingUser, note, targetStatu
       data: { status: targetStatus, lastActivityAt: new Date() },
     });
     await writeAudit(tx, { quotationId, userId: actingUser.id, action: auditAction, note });
+    if (targetStatus === 'CONFIRMED') {
+      await createSubscriptionsForQuotation(tx, quotation);
+    }
   });
 
   return getQuotationById(quotationId, actingUser);

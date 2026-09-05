@@ -30,6 +30,16 @@ export const deactivateProduct = async (id) => {
   return res.data.data.product;
 };
 
+export const getProductSubscriptionPlans = async (id) => {
+  const res = await apiClient.get(`/api/internal/products/${id}/subscription-plans`);
+  return res.data.data.plans;
+};
+
+export const updateProductSubscriptionPlans = async (id, plans) => {
+  const res = await apiClient.put(`/api/internal/products/${id}/subscription-plans`, { plans });
+  return res.data.data.plans;
+};
+
 export const uploadProductImage = async (id, file) => {
   const body = new FormData();
   body.append('image', file);

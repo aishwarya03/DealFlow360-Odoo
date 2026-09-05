@@ -13,7 +13,7 @@ import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 import { toCartItem } from '../lib/cartItem';
 import { formatINR, formatPrice } from '../lib/currency';
 
-const CYCLE_LABEL = { month: 'Monthly total', year: 'Yearly total' };
+const CYCLE_LABEL = { month: 'Monthly total', quarter: 'Quarterly total', year: 'Yearly total' };
 
 const Cart = () => {
   useBrandTag(`Your Quote Cart · ${NETRIX_TAG.title}`, NETRIX_TAG.icon);
@@ -145,7 +145,7 @@ const Cart = () => {
                     </span>
                   </div>
                 )}
-                {['month', 'year'].map(
+                {['month', 'quarter', 'year'].map(
                   (cycle) =>
                     totals[cycle] > 0 && (
                       <div key={cycle} className="flex justify-between">

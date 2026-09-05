@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { actOnStep } from '../../api/approvals';
@@ -168,6 +168,19 @@ const QuotationDetailPage = () => {
           <div className="flex items-center gap-2">
             <StatusBadge status={quotation.status} dot />
 
+            {quotation.chatConversation && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  navigate(`/workspace/chat?conversationId=${quotation.chatConversation.id}`)
+                }
+              >
+                <MessageCircle className="size-4" aria-hidden="true" />
+                {quotation.chatConversation.status === 'PENDING' ? 'Chat waiting' : 'View chat'}
+              </Button>
+            )}
+
             {quotation.status === 'DRAFT' && isOwnerOrManager && (
               <Button
                 size="sm"
@@ -285,7 +298,7 @@ const QuotationDetailPage = () => {
             )
           }
         >
-          <DataTable columns={lineColumns} rows={quotation.lines} />
+          <DataTable columns={lineColumns} rows={quotation.lines} pageSize={0} />
           {quotation.totals && (
             <div className="flex justify-end gap-6 border-t border-slate-100 px-4 py-3 text-sm">
               <span className="text-slate-500">

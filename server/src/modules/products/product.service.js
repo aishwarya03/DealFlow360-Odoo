@@ -53,6 +53,50 @@ const withCategory = {
   },
 };
 
+const toPublicPlans = (plans) =>
+  plans.map((plan) => ({
+    id: plan.id,
+    cycle: plan.cycle,
+    amount: toNumber(plan.amount),
+    isActive: plan.isActive,
+  }));
+
+export const listProductSubscriptionPlans = async (productId) => {
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw ApiError.notFound(`No product with id ${productId}`);
+
+  const plans = await prisma.productSubscriptionPlan.findMany({
+    where: { productId },
+    orderBy: { cycle: 'asc' },
+  });
+
+  return toPublicPlans(plans);
+};
+
+/**
+ * Replaces the full plan set for a product in one call — the admin form
+ * edits monthly/quarterly/yearly together, so this is upsert-by-cycle rather
+ * than three separate endpoints. A cycle omitted from `plans` is left alone
+ * (not deleted): leaving YEARLY blank just means the admin hasn't configured
+ * it yet, not that it should be removed if it already existed.
+ */
+export const upsertProductSubscriptionPlans = async (productId, plans) => {
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw ApiError.notFound(`No product with id ${productId}`);
+
+  await prisma.$transaction(
+    plans.map((plan) =>
+      prisma.productSubscriptionPlan.upsert({
+        where: { productId_cycle: { productId, cycle: plan.cycle } },
+        create: { productId, cycle: plan.cycle, amount: plan.amount, isActive: plan.isActive ?? true },
+        update: { amount: plan.amount, isActive: plan.isActive ?? true },
+      })
+    )
+  );
+
+  return listProductSubscriptionPlans(productId);
+};
+
 const assertCategoryExists = async (categoryId) => {
   if (categoryId === undefined) return;
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -156,6 +200,17 @@ export const getPublicProductById = async (id) => {
 
   const full = toPublicProduct(product);
 
+  // Only a subscribable product has plans worth fetching — this is what the
+  // product detail page renders as "Monthly / Quarterly / Yearly" pricing.
+  const plans = full.isSubscribable
+    ? toPublicPlans(
+        await prisma.productSubscriptionPlan.findMany({
+          where: { productId: id, isActive: true },
+          orderBy: { cycle: 'asc' },
+        })
+      )
+    : [];
+
   return {
     id: full.id,
     sku: full.sku,
@@ -172,6 +227,7 @@ export const getPublicProductById = async (id) => {
     updatedAt: full.updatedAt,
     price: full.listPrice,
     cycle: full.isSubscribable ? 'month' : null,
+    subscriptionPlans: plans,
   };
 };
 
