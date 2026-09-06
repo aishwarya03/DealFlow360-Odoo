@@ -90,30 +90,52 @@ const MyQuotations = () => {
         ) : (
           <div className="mt-8 animate-fade-in divide-y divide-slate-100 rounded-lg border border-slate-200">
             {pageQuotations.map((quotation) => (
-              <div
-                key={quotation.id}
-                className="flex items-center gap-4 p-5 transition-colors hover:bg-slate-50"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2.5">
-                    <p className="text-base font-medium text-slate-900">{displayCode(quotation.id)}</p>
-                    <StatusBadge status={quotation.status} dot />
+              <div key={quotation.id} className="p-5 transition-colors hover:bg-slate-50">
+                <div className="flex items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5">
+                      <p className="text-base font-medium text-slate-900">{displayCode(quotation.id)}</p>
+                      <StatusBadge status={quotation.status} dot />
+                    </div>
+                    <p className="mt-1.5 text-sm text-slate-500">
+                      {quotation.lines.length} item{quotation.lines.length === 1 ? '' : 's'} ·{' '}
+                      {new Date(quotation.createdAt).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-sm text-slate-500">
-                    {quotation.lines.length} item{quotation.lines.length === 1 ? '' : 's'} ·{' '}
-                    {new Date(quotation.createdAt).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
+                  <p className="shrink-0 text-base font-medium tabular-nums text-slate-900">
+                    ₹{quotation.total.toLocaleString('en-IN')}
                   </p>
+                  <Link to={`/portal/quotations/${quotation.id}`} className="shrink-0">
+                    <Button variant="secondary" size="sm">View</Button>
+                  </Link>
                 </div>
-                <p className="shrink-0 text-base font-medium tabular-nums text-slate-900">
-                  ₹{quotation.total.toLocaleString('en-IN')}
-                </p>
-                <Link to={`/portal/quotations/${quotation.id}`} className="shrink-0">
-                  <Button variant="secondary" size="sm">View</Button>
-                </Link>
+
+                {quotation.previousQuotations?.length > 0 && (
+                  <div className="mt-3 border-t border-dashed border-slate-200 pt-3 pl-0.5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                      Previous Quotes
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {quotation.previousQuotations.map((previous) => (
+                        <li key={previous.id} className="flex items-center gap-2.5 text-sm">
+                          <span className="text-slate-500">{displayCode(previous.id)}</span>
+                          <StatusBadge status={previous.status} dot />
+                          <span className="text-slate-400">
+                            {new Date(previous.createdAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>

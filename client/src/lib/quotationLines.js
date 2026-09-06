@@ -32,9 +32,10 @@ export const isStockedProductType = (productType) => productType === 'GOODS';
 // A plain average of discountPercent across lines lets many small over-ceiling
 // violations hide — 2 points over here, 3 there, none alarming alone. So each
 // line's discount is weighted by its own value (qty * unitPrice, i.e. how much
-// revenue it actually discounts), and any line over its ceiling has its excess
-// counted a second time before weighting — so a spread of small violations
-// stacks into a visibly higher blended number instead of averaging away.
+// revenue it actually discounts), and any line over its ceiling contributes
+// only its excess-over-ceiling (not the raw discount itself) — so a spread of
+// small violations stacks into a visibly higher blended number instead of
+// averaging away.
 export const computeBlendedDiscountRisk = (lines) => {
   if (!lines?.length) return 0;
 
@@ -44,8 +45,7 @@ export const computeBlendedDiscountRisk = (lines) => {
   for (const line of lines) {
     const discount = Number(line.discountPercent) || 0;
     const ceiling = Number(line.ceilingAtEntry) || 0;
-    const excess = discount > ceiling ? discount - ceiling : 0;
-    const effectiveDiscount = discount + excess;
+    const effectiveDiscount = discount > ceiling ? discount - ceiling : discount;
 
     const weight = (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0);
 
