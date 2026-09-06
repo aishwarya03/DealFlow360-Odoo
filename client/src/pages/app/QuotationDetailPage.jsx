@@ -19,6 +19,7 @@ import StatusBadge from '../../components/StatusBadge';
 import StepProgress from '../../components/StepProgress';
 import { useAuth } from '../../hooks/useAuth';
 import { formatINR } from '../../lib/currency';
+import { computeBlendedDiscountRisk } from '../../lib/quotationLines';
 
 const CAN_ACT_ON_QUOTATION = ['SALES_REP', 'SALES_MANAGER'];
 
@@ -319,14 +320,7 @@ const QuotationDetailPage = () => {
 
       <div className="space-y-4">
         {quotation.lines?.length > 0 && (
-          <DiscountRiskMeter
-            discountPercent={
-              quotation.lines.reduce(
-                (sum, l) => sum + (Number(l.discountPercent) || 0),
-                0
-              ) / quotation.lines.length
-            }
-          />
+          <DiscountRiskMeter discountPercent={computeBlendedDiscountRisk(quotation.lines)} />
         )}
 
         <DetailSection
@@ -344,6 +338,14 @@ const QuotationDetailPage = () => {
           <DataTable columns={lineColumns} rows={quotation.lines} pageSize={0} />
           {quotation.totals && (
             <div className="flex justify-end gap-6 border-t border-slate-100 px-4 py-3 text-sm">
+              {quotation.lines?.length > 0 && (
+                <span className="text-slate-500">
+                  Blended discount{' '}
+                  <span className="ml-1.5 font-medium text-slate-900">
+                    {computeBlendedDiscountRisk(quotation.lines).toFixed(1)}%
+                  </span>
+                </span>
+              )}
               <span className="text-slate-500">
                 Subtotal <span className="ml-1.5 font-medium text-slate-900">{formatINR(quotation.totals.netTotal)}</span>
               </span>
