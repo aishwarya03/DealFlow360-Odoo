@@ -143,6 +143,16 @@ const portalInclude = {
   lines: { include: { product: { select: { id: true, name: true, sku: true } } } },
 };
 
+// A lightweight entry for a superseded quotation in a revision chain — just
+// enough to list it under "Previous Quotes", not the full lines/total detail
+// the current revision gets.
+const toPortalQuotationSummary = (quotation) => ({
+  id: quotation.id,
+  code: displayCode(quotation.id),
+  status: quotation.status,
+  createdAt: quotation.createdAt,
+});
+
 /**
  * Creates the quotation a customer asked for from the public site.
  *
@@ -326,6 +336,13 @@ export const registerAndRequestQuotation = async ({ message, lines, ...registrat
   };
 };
 
+/**
+ * A revised quotation (previousQuotationId set by a rep re-quoting a
+ * rejected/withdrawn one) is the same deal as its predecessor, not a separate
+ * entry. The customer should see one row per chain — the latest revision,
+ * carrying whatever status it currently holds — with the superseded ones
+ * folded underneath as "Previous Quotes", newest first.
+ */
 export const listCustomerQuotations = async (customerId) => {
   const quotations = await prisma.quotation.findMany({
     where: { customerId },
@@ -333,7 +350,30 @@ export const listCustomerQuotations = async (customerId) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  return quotations.map(toPortalQuotation);
+  const byId = new Map(quotations.map((quotation) => [quotation.id, quotation]));
+  // Anything referenced as someone else's previousQuotationId has been
+  // superseded, so it is not the head of its chain.
+  const supersededIds = new Set(
+    quotations
+      .filter((quotation) => quotation.previousQuotationId != null)
+      .map((quotation) => quotation.previousQuotationId)
+  );
+  const latestQuotations = quotations.filter((quotation) => !supersededIds.has(quotation.id));
+
+  return latestQuotations
+    .map((quotation) => {
+      const previousQuotations = [];
+      let cursor = quotation.previousQuotationId;
+      while (cursor != null) {
+        const previous = byId.get(cursor);
+        if (!previous) break;
+        previousQuotations.push(toPortalQuotationSummary(previous));
+        cursor = previous.previousQuotationId;
+      }
+
+      return { ...toPortalQuotation(quotation), previousQuotations };
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
 export const getCustomerQuotation = async (customerId, quotationId) => {
@@ -348,5 +388,14 @@ export const getCustomerQuotation = async (customerId, quotationId) => {
     throw ApiError.notFound('Quotation not found');
   }
 
-  return toPortalQuotation(quotation);
+  const previousQuotations = [];
+  let cursor = quotation.previousQuotationId;
+  while (cursor != null) {
+    const previous = await prisma.quotation.findUnique({ where: { id: cursor } });
+    if (!previous || previous.customerId !== customerId) break;
+    previousQuotations.push(toPortalQuotationSummary(previous));
+    cursor = previous.previousQuotationId;
+  }
+
+  return { ...toPortalQuotation(quotation), previousQuotations };
 };

@@ -78,7 +78,7 @@ const AppShell = () => {
         onClose={() => setIsPaletteOpen(false)}
       />
 
-      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="flex h-14 items-center border-b border-slate-200 px-4">
           <Logo />
         </div>
@@ -99,7 +99,7 @@ const AppShell = () => {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-6 overflow-y-auto p-3">
+        <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto p-3 [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.300)_transparent]">
           <NavSection title="Workspace" items={workspaceItems} />
           <NavSection title="Configuration" items={configItems} />
         </nav>

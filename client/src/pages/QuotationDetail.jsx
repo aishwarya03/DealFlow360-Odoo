@@ -169,6 +169,21 @@ const QuotationDetail = () => {
               <Field label="Total">₹{quotation.total.toLocaleString('en-IN')}</Field>
             </div>
 
+            {quotation.previousQuotations?.length > 0 && (
+              <>
+                <h2 className="mt-10 text-lg font-semibold text-slate-900">Previous Quotes</h2>
+                <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {quotation.previousQuotations.map((previous) => (
+                    <div key={previous.id} className="flex items-center gap-2.5 px-4 py-3">
+                      <p className="text-sm font-medium text-slate-700">{previous.code}</p>
+                      <StatusBadge status={previous.status} dot />
+                      <p className="ml-auto text-sm text-slate-400">{formatDate(previous.createdAt)}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             <h2 className="mt-10 text-lg font-semibold text-slate-900">Order lines</h2>
             <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full text-sm">
