@@ -203,6 +203,8 @@ const QuotationDetailPage = () => {
           <div className="flex items-center gap-2">
             <StatusBadge status={quotation.status} dot />
 
+            {quotation.lines?.length > 0 && <DiscountRiskMeter lines={quotation.lines} />}
+
             {quotation.invoice && (
               <SmartButton
                 icon={Receipt}
@@ -382,10 +384,6 @@ const QuotationDetailPage = () => {
       )}
 
       <div className="space-y-4">
-        {quotation.lines?.length > 0 && (
-          <DiscountRiskMeter discountPercent={computeBlendedDiscountRisk(quotation.lines)} />
-        )}
-
         <DetailSection
           title="Lines"
           padded={false}
@@ -403,7 +401,7 @@ const QuotationDetailPage = () => {
             <div className="flex justify-end gap-6 border-t border-slate-100 px-4 py-3 text-sm">
               {quotation.lines?.length > 0 && (
                 <span className="text-slate-500">
-                  Blended discount{' '}
+                  Discount risk{' '}
                   <span className="ml-1.5 font-medium text-slate-900">
                     {computeBlendedDiscountRisk(quotation.lines).toFixed(1)}%
                   </span>

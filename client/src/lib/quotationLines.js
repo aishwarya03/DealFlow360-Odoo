@@ -28,33 +28,33 @@ export const normalizeAllocations = (rows) =>
 // buildLineData, which skips allocation entirely for non-GOODS products).
 export const isStockedProductType = (productType) => productType === 'GOODS';
 
-// Blended discount-governance risk % for a quotation (drives DiscountRiskMeter).
-// A plain average of discountPercent across lines lets many small over-ceiling
-// violations hide — 2 points over here, 3 there, none alarming alone. So each
-// line's discount is weighted by its own value (qty * unitPrice, i.e. how much
-// revenue it actually discounts), and any line over its ceiling contributes
-// only its excess-over-ceiling (not the raw discount itself) — so a spread of
-// small violations stacks into a visibly higher blended number instead of
-// averaging away.
+// Blended discount-governance risk for a quotation (drives DiscountRiskMeter)
+// — the client-side mirror of discountEvaluation.service.js's §3.2 formula:
+// weightedOverage = Σ excessPercent × lineGross, blendedSeverity = that / Σ
+// lineGross. A compliant line's excessPercent is exactly 0 — it must never
+// contribute its raw discount, only genuine breaches count, otherwise a
+// fully-compliant quotation would show a nonzero "risk" (this was a real bug
+// here previously: a `: discount` fallback let every compliant line's own
+// discount% leak into the blend instead of 0).
 export const computeBlendedDiscountRisk = (lines) => {
   if (!lines?.length) return 0;
 
-  let weightedSum = 0;
-  let totalWeight = 0;
+  let weightedOverage = 0;
+  let grossTotal = 0;
 
   for (const line of lines) {
     const discount = Number(line.discountPercent) || 0;
     const ceiling = Number(line.ceilingAtEntry) || 0;
-    const effectiveDiscount = discount > ceiling ? discount - ceiling : discount;
+    const excessPercent = Math.max(0, discount - ceiling);
 
-    const weight = (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0);
+    const lineGross = (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0);
 
-    weightedSum += effectiveDiscount * weight;
-    totalWeight += weight;
+    weightedOverage += excessPercent * lineGross;
+    grossTotal += lineGross;
   }
 
-  if (totalWeight === 0) return 0;
-  return weightedSum / totalWeight;
+  if (grossTotal === 0) return 0;
+  return weightedOverage / grossTotal;
 };
 
 export const emptyLine = () => ({
