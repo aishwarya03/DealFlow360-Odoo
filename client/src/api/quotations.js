@@ -34,3 +34,13 @@ export const withdrawQuotation = async (id, note) => {
   const res = await apiClient.post(`/api/internal/quotations/${id}/withdraw`, { note });
   return res.data.data.quotation;
 };
+
+export const dispatchQuotation = async (id) => {
+  const res = await apiClient.post(`/api/internal/quotations/${id}/dispatch`);
+  return res.data.data.quotation;
+};
+
+export const deliverQuotation = async (id) => {
+  const res = await apiClient.post(`/api/internal/quotations/${id}/deliver`);
+  return res.data.data.quotation;
+};

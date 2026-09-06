@@ -1,26 +1,40 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { actOnStep } from '../../api/approvals';
-import { confirmQuotation, getQuotation, submitQuotation, withdrawQuotation } from '../../api/quotations';
+import { payInvoice } from '../../api/invoices';
+import {
+  confirmQuotation,
+  deliverQuotation,
+  dispatchQuotation,
+  getQuotation,
+  submitQuotation,
+  withdrawQuotation,
+} from '../../api/quotations';
 import Button from '../../components/Button';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import DataTable from '../../components/DataTable';
 import DetailSection from '../../components/DetailSection';
 import DiscountRiskMeter from '../../components/DiscountRiskMeter';
 import EditQuotationLinesModal from '../../components/EditQuotationLinesModal';
+import InvoicePreviewModal from '../../components/InvoicePreviewModal';
 import NoteModal from '../../components/NoteModal';
 import PageHeader from '../../components/PageHeader';
 import QuotationFormModal from '../../components/QuotationFormModal';
 import { Skeleton, SkeletonTable } from '../../components/Skeleton';
+import SmartButton from '../../components/SmartButton';
 import StatusBadge from '../../components/StatusBadge';
 import StepProgress from '../../components/StepProgress';
 import { useAuth } from '../../hooks/useAuth';
 import { formatINR } from '../../lib/currency';
 
 const CAN_ACT_ON_QUOTATION = ['SALES_REP', 'SALES_MANAGER'];
+
+// "Record payments" (access matrix §6) — Finance + Admin only, matching the
+// server-side authorize() on POST /invoices/:id/pay.
+const CAN_RECORD_PAYMENT = ['FINANCE', 'ADMIN'];
 
 // Matches the backend's LINES_EDITABLE_STATUSES exactly (quotation.service.js)
 // — DRAFT is a rep still shaping it, UNDER_NEGOTIATION is applying a
@@ -58,6 +72,7 @@ const QuotationDetailPage = () => {
   const [isRequoting, setIsRequoting] = useState(false);
   const [isEditingLines, setIsEditingLines] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
 
   const load = () => {
     getQuotation(id)
@@ -187,6 +202,20 @@ const QuotationDetailPage = () => {
           <div className="flex items-center gap-2">
             <StatusBadge status={quotation.status} dot />
 
+            {quotation.invoice && (
+              <SmartButton
+                icon={Receipt}
+                label="Invoice"
+                value={
+                  <span className="inline-flex items-center gap-1.5">
+                    {formatINR(quotation.invoice.totalAmount)}
+                    <StatusBadge status={quotation.invoice.isOverdue ? 'OVERDUE' : quotation.invoice.status} />
+                  </span>
+                }
+                onClick={() => setShowInvoice(true)}
+              />
+            )}
+
             {quotation.chatConversation && (
               <Button
                 size="sm"
@@ -233,6 +262,28 @@ const QuotationDetailPage = () => {
                   Withdraw
                 </Button>
               </>
+            )}
+
+            {quotation.status === 'CONFIRMED' && !quotation.dispatchedAt && isOwnerOrManager && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={isBusy}
+                onClick={() => runAction('Quotation dispatched', () => dispatchQuotation(quotation.id))}
+              >
+                Mark Dispatched
+              </Button>
+            )}
+
+            {quotation.dispatchedAt && !quotation.deliveredAt && isOwnerOrManager && (
+              <Button
+                size="sm"
+                variant="success"
+                disabled={isBusy}
+                onClick={() => runAction('Quotation delivered', () => deliverQuotation(quotation.id))}
+              >
+                Mark Delivered
+              </Button>
             )}
 
             {['REJECTED', 'WITHDRAWN'].includes(quotation.status) && isOwnerOrManager && (
@@ -306,6 +357,18 @@ const QuotationDetailPage = () => {
         />
       )}
 
+      {showInvoice && quotation.invoice && (
+        <InvoicePreviewModal
+          quotation={quotation}
+          onClose={() => setShowInvoice(false)}
+          canMarkPaid={CAN_RECORD_PAYMENT.includes(user.role)}
+          isBusy={isBusy}
+          onMarkPaid={() =>
+            runAction('Invoice marked paid', () => payInvoice(quotation.invoice.id))
+          }
+        />
+      )}
+
       {isEditingLines && (
         <EditQuotationLinesModal
           quotation={quotation}
@@ -356,6 +419,26 @@ const QuotationDetailPage = () => {
             </div>
           )}
         </DetailSection>
+
+        {quotation.dispatchedAt && (
+          <DetailSection
+            title="Fulfillment"
+            description="Dispatch and delivery are recorded manually; delivery generates the one-time invoice (see the Invoice button above)."
+          >
+            <div className="flex flex-wrap items-center gap-6 text-sm">
+              <div>
+                <p className="text-xs text-slate-400">Dispatched</p>
+                <p className="text-slate-900">{new Date(quotation.dispatchedAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Delivered</p>
+                <p className="text-slate-900">
+                  {quotation.deliveredAt ? new Date(quotation.deliveredAt).toLocaleString() : '—'}
+                </p>
+              </div>
+            </div>
+          </DetailSection>
+        )}
 
         {quotation.approvalRequests?.length > 0 && (
           <DetailSection

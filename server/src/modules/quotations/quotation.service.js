@@ -24,7 +24,21 @@ const REQUOTABLE_STATUSES = ['REJECTED', 'WITHDRAWN'];
 // customer has actually seen the terms (APPROVED) or is mid-negotiation.
 const CUSTOMER_DECISION_STATUSES = ['APPROVED', 'UNDER_NEGOTIATION'];
 
-const displayCode = (id) => `Q-${1000 + id}`;
+// A quotation can only be dispatched once it's a real, confirmed order —
+// there's nothing to ship before that. Delivery has no status precondition
+// of its own beyond dispatchedAt already being set (checked in
+// deliverQuotation directly), since dispatch/deliver are a strict two-step
+// sequence layered on top of CONFIRMED, not a further QuotationStatus value.
+const DISPATCHABLE_STATUSES = ['CONFIRMED'];
+
+// Net terms for the one-time invoice generated on delivery — see
+// deliverQuotation. Not configurable yet; the first thing to make an Admin
+// setting if a demo ever needs a different term.
+const INVOICE_NET_DAYS = 15;
+
+// Exported for billing.service.js, which renders a quotation's display code
+// alongside its invoice without re-fetching the full quotation.
+export const displayCode = (id) => `Q-${1000 + id}`;
 
 const toPublicLine = (line) => ({
   id: line.id,
@@ -91,12 +105,48 @@ const computeTotals = (lines) => {
   };
 };
 
+// The one-time Invoice (see deliverQuotation) only ever covers non-recurring
+// lines — recurring lines are billed exclusively through
+// Subscription/SubscriptionInvoice and must never be double-billed here.
+// Same per-line math as computeTotals, just scoped to a filtered subset.
+const computeOneTimeInvoiceAmounts = (lines) => {
+  const { netTotal, taxTotal, grandTotal } = computeTotals(lines.filter((line) => !line.isRecurring));
+  return { netAmount: netTotal, taxAmount: taxTotal, totalAmount: grandTotal };
+};
+
+// Exported for billing.service.js, which lists/pays invoices across
+// quotations rather than through a single quotation's own detail fetch.
+export const toPublicInvoice = (invoice) => ({
+  id: invoice.id,
+  netAmount: toNumber(invoice.netAmount),
+  taxAmount: toNumber(invoice.taxAmount),
+  totalAmount: toNumber(invoice.totalAmount),
+  status: invoice.status,
+  // Derived, never stored (see schema comment on InvoiceStatus) — an unpaid
+  // invoice past its due date reads as overdue without a cron ever having to
+  // flip a column.
+  isOverdue: invoice.status === 'UNPAID' && new Date(invoice.dueDate) < new Date(),
+  dueDate: invoice.dueDate,
+  paidAt: invoice.paidAt,
+  createdAt: invoice.createdAt,
+});
+
 const toPublicQuotation = (quotation) => ({
   id: quotation.id,
   code: displayCode(quotation.id),
   status: quotation.status,
   customer: quotation.customer
-    ? { id: quotation.customer.id, name: quotation.customer.name, tierId: quotation.customer.tierId }
+    ? {
+        id: quotation.customer.id,
+        name: quotation.customer.name,
+        tierId: quotation.customer.tierId,
+        // Only present on the detail fetch (see detailInclude) — the invoice
+        // preview's "Bill to" block needs these; the list view doesn't ask
+        // for them, so they're simply absent there rather than null.
+        email: quotation.customer.email,
+        phone: quotation.customer.phone,
+        address: quotation.customer.address,
+      }
     : { id: quotation.customerId },
   owner: quotation.owner ? { id: quotation.owner.id, name: quotation.owner.name } : { id: quotation.ownerId },
   termsVersion: quotation.termsVersion,
@@ -104,6 +154,9 @@ const toPublicQuotation = (quotation) => ({
   customerReference: quotation.customerReference,
   notes: quotation.notes,
   confirmedAt: quotation.confirmedAt,
+  dispatchedAt: quotation.dispatchedAt,
+  deliveredAt: quotation.deliveredAt,
+  invoice: quotation.invoice ? toPublicInvoice(quotation.invoice) : null,
   sourceQuoteRequestId: quotation.sourceQuoteRequestId,
   previousQuotationId: quotation.previousQuotationId,
   supersededByQuotationId: quotation.supersededBy?.id ?? null,
@@ -145,7 +198,7 @@ const toPublicQuotation = (quotation) => ({
 });
 
 const detailInclude = {
-  customer: { select: { id: true, name: true, tierId: true } },
+  customer: { select: { id: true, name: true, tierId: true, email: true, phone: true, address: true } },
   owner: { select: { id: true, name: true } },
   supersededBy: { select: { id: true } },
   lines: {
@@ -156,6 +209,7 @@ const detailInclude = {
     },
   },
   chatConversation: { select: { id: true, status: true } },
+  invoice: true,
   approvalRequests: {
     orderBy: { createdAt: 'asc' },
     include: {
@@ -706,3 +760,86 @@ export const confirmQuotation = async (quotationId, actingUser, note) => {
 
 export const withdrawQuotation = (quotationId, actingUser, note) =>
   recordCustomerDecision(quotationId, actingUser, note, 'WITHDRAWN', 'WITHDRAWN');
+
+const assertCanActOnFulfillment = (quotation, actingUser) => {
+  if (actingUser.role === 'SALES_REP' && quotation.ownerId !== actingUser.id) {
+    throw ApiError.forbidden('You can only update fulfillment for quotations you own');
+  }
+};
+
+// First of the two manual fulfillment checkpoints — see the dispatchedAt
+// comment on the Quotation model. Nothing else reacts to dispatch; it exists
+// so "on the way" is visible before delivery, and so delivery has a
+// precondition to enforce (can't deliver what was never dispatched).
+export const dispatchQuotation = async (quotationId, actingUser) => {
+  const quotation = await prisma.quotation.findUnique({ where: { id: quotationId } });
+  if (!quotation) throw ApiError.notFound(`No quotation with id ${quotationId}`);
+  assertCanActOnFulfillment(quotation, actingUser);
+
+  if (!DISPATCHABLE_STATUSES.includes(quotation.status)) {
+    throw ApiError.badRequest(`Cannot dispatch a quotation in ${quotation.status} status`);
+  }
+  if (quotation.dispatchedAt) {
+    throw ApiError.badRequest('This quotation has already been dispatched');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { dispatchedAt: new Date(), lastActivityAt: new Date() },
+    });
+    await writeAudit(tx, { quotationId, userId: actingUser.id, action: 'DISPATCHED' });
+  });
+
+  return getQuotationById(quotationId, actingUser);
+};
+
+// Second checkpoint — and the one that actually bills. Generates the
+// one-time Invoice for this quotation's non-recurring lines, exactly once
+// (Invoice.quotationId is @unique, so a repeat call fails loudly rather than
+// double-billing). Recurring lines are untouched here; they're already on
+// their own Subscription/SubscriptionInvoice cycle from confirmation.
+export const deliverQuotation = async (quotationId, actingUser) => {
+  const quotation = await prisma.quotation.findUnique({
+    where: { id: quotationId },
+    include: { lines: true },
+  });
+  if (!quotation) throw ApiError.notFound(`No quotation with id ${quotationId}`);
+  assertCanActOnFulfillment(quotation, actingUser);
+
+  if (!quotation.dispatchedAt) {
+    throw ApiError.badRequest('This quotation must be dispatched before it can be marked delivered');
+  }
+  if (quotation.deliveredAt) {
+    throw ApiError.badRequest('This quotation has already been marked delivered');
+  }
+
+  const { netAmount, taxAmount, totalAmount } = computeOneTimeInvoiceAmounts(quotation.lines);
+  const now = new Date();
+  const dueDate = new Date(now.getTime() + INVOICE_NET_DAYS * 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { deliveredAt: now, lastActivityAt: now },
+    });
+    await writeAudit(tx, { quotationId, userId: actingUser.id, action: 'DELIVERED' });
+
+    // A quotation whose non-recurring lines net to zero (all-subscription
+    // order) has nothing to invoice one-time — skip rather than create a
+    // ₹0 invoice nobody will ever mark paid.
+    if (totalAmount > 0) {
+      await tx.invoice.create({
+        data: { quotationId, netAmount, taxAmount, totalAmount, dueDate },
+      });
+      await writeAudit(tx, {
+        quotationId,
+        userId: actingUser.id,
+        action: 'INVOICE_GENERATED',
+        note: `₹${totalAmount} due ${dueDate.toLocaleDateString('en-IN')}`,
+      });
+    }
+  });
+
+  return getQuotationById(quotationId, actingUser);
+};
