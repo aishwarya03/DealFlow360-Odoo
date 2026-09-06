@@ -8,6 +8,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import DataTable from '../../components/DataTable';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
+import Textarea from '../../components/Textarea';
 import { useAuth } from '../../hooks/useAuth';
 import { createCustomer, deactivateCustomer, listCustomers, updateCustomer } from '../../api/customers';
 
@@ -19,7 +20,7 @@ const tierTone = {
 
 const CAN_CREATE = ['ADMIN', 'SALES_REP', 'SALES_MANAGER'];
 
-const emptyForm = () => ({ name: '', email: '', contactName: '', phone: '' });
+const emptyForm = () => ({ name: '', email: '', contactName: '', phone: '', address: '' });
 
 const CustomersPage = () => {
   const { user } = useAuth();
@@ -39,7 +40,7 @@ const CustomersPage = () => {
 
   const openForm = (customer = null) => {
     setEditing(customer ? { id: customer.id } : {});
-    setForm(customer ? { name: customer.name, email: customer.email, contactName: customer.contactName ?? '', phone: customer.phone ?? '' } : emptyForm());
+    setForm(customer ? { name: customer.name, email: customer.email, contactName: customer.contactName ?? '', phone: customer.phone ?? '', address: customer.address ?? '' } : emptyForm());
   };
   const change = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const save = async (event) => {
@@ -106,7 +107,7 @@ const CustomersPage = () => {
         }
       />
       {editing && <ConfigModal title={editing.id ? 'Edit Customer' : 'New Customer'} onClose={() => setEditing(null)} onSubmit={save} isSaving={isSaving}>
-        <div className="grid gap-4 sm:grid-cols-2"><Input label="Company name" name="name" value={form.name} onChange={change('name')} required /><Input label="Email" name="email" type="email" value={form.email} onChange={change('email')} required /><Input label="Contact name" name="contactName" value={form.contactName} onChange={change('contactName')} /><Input label="Phone" name="phone" value={form.phone} onChange={change('phone')} /></div>
+        <div className="grid gap-4 sm:grid-cols-2"><Input label="Company name" name="name" value={form.name} onChange={change('name')} required /><Input label="Email" name="email" type="email" value={form.email} onChange={change('email')} required /><Input label="Contact name" name="contactName" value={form.contactName} onChange={change('contactName')} /><Input label="Phone" name="phone" value={form.phone} onChange={change('phone')} /><div className="sm:col-span-2"><Textarea label="Billing / delivery address" name="address" rows={2} value={form.address} onChange={change('address')} /></div></div>
       </ConfigModal>}
 
       <DataTable

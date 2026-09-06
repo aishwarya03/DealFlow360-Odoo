@@ -68,4 +68,10 @@ router.post(
   quotationController.withdraw
 );
 
+// Manual fulfillment checkpoints (§ dispatchedAt/deliveredAt on the schema)
+// — same authorization as the rest of a rep's own quotation actions.
+// Delivered is the one that generates the one-time Invoice.
+router.post('/:id/dispatch', authorize('SALES_REP', 'SALES_MANAGER'), parseId(), quotationController.dispatch);
+router.post('/:id/deliver', authorize('SALES_REP', 'SALES_MANAGER'), parseId(), quotationController.deliver);
+
 export default router;

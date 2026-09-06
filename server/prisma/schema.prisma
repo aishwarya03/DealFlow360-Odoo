@@ -613,6 +613,18 @@ model Quotation {
   // indexed column, not a walk through AuditLog for every row.
   confirmedAt DateTime?
 
+  // Manual fulfillment checkpoints — no per-line/per-warehouse shipment
+  // tracking (see FulfillmentSplit in docs/SOURCE_OF_TRUTH.md §2.8, still not
+  // built): one "Dispatched" and one "Delivered" button per quotation is all
+  // the brief's demo needs, and it's what generates the one-time Invoice
+  // (below) — see quotation.service.js's deliverQuotation. Both set once,
+  // same "set once, never unset" convention as confirmedAt; deliveredAt can
+  // only be set once dispatchedAt already is.
+  dispatchedAt DateTime?
+  deliveredAt  DateTime?
+
+  invoice Invoice?
+
   // Which public lead (if any) started this chain. Copied forward to every
   // quotation in a chain at creation time — a one-time copy of an immutable
   // fact, so it never needs to be kept in sync.
@@ -930,6 +942,50 @@ model AuditLog {
 
   @@index([quotationId, createdAt])
   @@map("audit_logs")
+}
+
+// ── Billing (one-time) ─────────────────────────────────────────────────
+//
+// Recurring billing (Subscription/SubscriptionInvoice) is a separate,
+// already-built track — this Invoice is only ever for a quotation's
+// NON-recurring lines, generated exactly once, the moment a quotation is
+// marked Delivered (see quotation.service.js's deliverQuotation). One
+// Invoice per Quotation (@unique) — no partial/per-shipment invoicing,
+// matching the decision not to build per-line fulfillment tracking (see the
+// dispatchedAt/deliveredAt comment on Quotation above).
+//
+// No OVERDUE stored status: "overdue" is derived at read time from
+// dueDate vs now, same "computed, never stored" rule as Inventory.available
+// and Quotation.code — a stored status would need a cron to flip it and
+// could drift from dueDate if that job ever missed a run.
+enum InvoiceStatus {
+  UNPAID
+  PAID
+}
+
+model Invoice {
+  id          Int       @id @default(autoincrement())
+  quotationId Int       @unique
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  // Snapshotted at generation time from the quotation's non-recurring lines
+  // only — same "never recomputed live" rule as QuotationLine's own
+  // snapshots, so a later price/tax-rate change can't silently redate an
+  // already-issued invoice.
+  netAmount   Decimal @db.Decimal(12, 2)
+  taxAmount   Decimal @db.Decimal(12, 2)
+  totalAmount Decimal @db.Decimal(12, 2)
+
+  status  InvoiceStatus @default(UNPAID)
+  dueDate DateTime
+  paidAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────

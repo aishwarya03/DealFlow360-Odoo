@@ -23,6 +23,7 @@ const toPublicCustomer = (customer) => ({
   },
   contactName: customer.contactName,
   phone: customer.phone,
+  address: customer.address,
   hasPortalAccess: Boolean(customer.passwordHash),
   isActive: customer.isActive,
   createdAt: customer.createdAt,

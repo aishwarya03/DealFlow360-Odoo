@@ -150,8 +150,8 @@ const Dashboard = () => {
 
         stock.forEach((item) => {
           if (whStockMap[item.warehouseId]) {
-            whStockMap[item.warehouseId].onHand += item.quantity || 0;
-            whStockMap[item.warehouseId].reserved += item.reservedQuantity || 0;
+            whStockMap[item.warehouseId].onHand += item.onHandQty || 0;
+            whStockMap[item.warehouseId].reserved += item.reservedQty || 0;
           }
         });
 

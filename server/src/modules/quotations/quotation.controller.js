@@ -98,3 +98,23 @@ export const withdraw = async (req, res) => {
     sendError(res, error.message);
   }
 };
+
+export const dispatch = async (req, res) => {
+  try {
+    const quotation = await quotationService.dispatchQuotation(req.params.id, req.user);
+
+    sendSuccess(res, 'Quotation dispatched', { quotation });
+  } catch (error) {
+    sendError(res, error.message);
+  }
+};
+
+export const deliver = async (req, res) => {
+  try {
+    const quotation = await quotationService.deliverQuotation(req.params.id, req.user);
+
+    sendSuccess(res, 'Quotation delivered', { quotation });
+  } catch (error) {
+    sendError(res, error.message);
+  }
+};

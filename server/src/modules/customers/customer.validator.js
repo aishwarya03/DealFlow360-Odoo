@@ -15,6 +15,7 @@ export const createCustomerSchema = z.object({
   email: z.string().trim().toLowerCase().email('Must be a valid email address'),
   contactName: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().min(5).max(30).optional(),
+  address: z.string().trim().max(300).optional(),
   ...metrics,
 });
 
@@ -24,6 +25,7 @@ export const updateCustomerSchema = z
     email: z.string().trim().toLowerCase().email().optional(),
     contactName: z.string().trim().min(2).max(120).nullable().optional(),
     phone: z.string().trim().min(5).max(30).nullable().optional(),
+    address: z.string().trim().max(300).nullable().optional(),
     isActive: z.boolean().optional(),
     ...metrics,
   })
