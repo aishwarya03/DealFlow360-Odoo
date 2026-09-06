@@ -51,9 +51,34 @@ const joinOwnConversations = async (socket) => {
           select: { id: true },
         });
 
-  for (const { id: conversationId } of conversations) {
+  return conversations.map(({ id: conversationId }) => {
     socket.join(conversationRoom(conversationId));
+    return conversationId;
+  });
+};
+
+// "Is a customer here right now" / "is a rep here right now" for one
+// conversation — a per-room, live-connection read, distinct from the app-wide
+// isRepOnline() in presence.service.js. A customer only ever holds a socket
+// while a chat panel is open, so this doubles as "chat window open" for them;
+// for a rep it's closer to "currently signed into the app" since they're
+// auto-joined to every conversation they participate in on connect.
+const roomPresence = (io, conversationId) => {
+  const socketIds = io.sockets.adapter.rooms.get(conversationRoom(conversationId)) ?? new Set();
+  let customerOnline = false;
+  let repOnline = false;
+
+  for (const socketId of socketIds) {
+    const user = io.sockets.sockets.get(socketId)?.data.user;
+    if (user?.audience === 'portal' && presence.isCustomerOnline(user.id)) customerOnline = true;
+    if (user?.audience === 'internal' && presence.isRepOnline(user.id)) repOnline = true;
   }
+
+  return { conversationId, customerOnline, repOnline };
+};
+
+const broadcastPresence = (io, conversationId) => {
+  io.to(conversationRoom(conversationId)).emit('chat:presence', roomPresence(io, conversationId));
 };
 
 // Lazily imported so this module and chat.service.js (which imports getIO
@@ -71,9 +96,22 @@ export const initSocket = (httpServer) => {
     if (audience === 'internal') {
       presence.markOnline(id, socket.id);
       socket.join(userRoom(id));
+    } else {
+      presence.markCustomerOnline(id, socket.id);
     }
+    socket.emit('chat:availability', {
+      audience,
+      available: audience === 'internal' ? presence.isRepOnline(id) : presence.isCustomerOnline(id),
+    });
 
-    await joinOwnConversations(socket);
+    // Every conversation room this socket is currently in — auto-joined ones
+    // from connect plus any joined later via chat:join — so disconnect knows
+    // which rooms to recompute presence for without asking the adapter to
+    // guess which conversation a socket.io room name maps back to.
+    const joinedConversationIds = new Set(await joinOwnConversations(socket));
+    for (const conversationId of joinedConversationIds) {
+      broadcastPresence(io, conversationId);
+    }
 
     socket.on('chat:join', async ({ conversationId }, ack) => {
       try {
@@ -84,10 +122,31 @@ export const initSocket = (httpServer) => {
           await chatService.assertInternalAccess(conversationId, id);
         }
         socket.join(conversationRoom(conversationId));
-        ack?.({ ok: true });
+        joinedConversationIds.add(conversationId);
+
+        const presenceSnapshot = roomPresence(io, conversationId);
+        ack?.({ ok: true, presence: presenceSnapshot });
+        // Tell whoever was already in the room (if anyone) that this side
+        // just joined — the joiner already has the snapshot via the ack.
+        socket.to(conversationRoom(conversationId)).emit('chat:presence', presenceSnapshot);
       } catch (error) {
         ack?.({ ok: false, message: error.message });
       }
+    });
+
+    socket.on('chat:availability', ({ available }, ack) => {
+      if (typeof available !== 'boolean') {
+        ack?.({ ok: false, message: 'Availability must be a boolean' });
+        return;
+      }
+
+      if (audience === 'internal') presence.setAway(id, !available);
+      else presence.setCustomerAway(id, !available);
+
+      for (const conversationId of joinedConversationIds) {
+        broadcastPresence(io, conversationId);
+      }
+      ack?.({ ok: true, available });
     });
 
     socket.on('chat:message', async ({ conversationId, body }, ack) => {
@@ -102,6 +161,13 @@ export const initSocket = (httpServer) => {
 
     socket.on('disconnect', () => {
       if (audience === 'internal') presence.markOffline(id, socket.id);
+      else presence.markCustomerOffline(id, socket.id);
+      // By the time 'disconnect' fires, socket.io has already removed this
+      // socket from every room's membership, so roomPresence() below
+      // correctly reflects its absence.
+      for (const conversationId of joinedConversationIds) {
+        broadcastPresence(io, conversationId);
+      }
     });
   });
 

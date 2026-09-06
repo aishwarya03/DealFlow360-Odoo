@@ -59,7 +59,7 @@ export const upsertSubscriptionPlans = async (req, res) => {
 export const uploadImage = async (req, res) => {
   if (!req.file) throw ApiError.badRequest('No image file provided (field name: image)');
 
-  const imageUrl = `/uploads/products/${req.file.filename}`;
+  const imageUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   const product = await productService.setProductImage(req.params.id, imageUrl);
 
   sendSuccess(res, 'Product image updated', { product });

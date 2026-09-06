@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send, UserPlus, X } from 'lucide-react';
 
-import { connectChatSocket } from '../lib/socket';
+import { setActiveConversationId } from '../lib/activeConversation';
+import { acquireChatSocket, releaseChatSocket } from '../lib/socket';
 import Button from './Button';
 import { cn } from '../lib/cn';
 
@@ -27,11 +28,16 @@ const ChatPanel = ({
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  // The other side's live presence in THIS conversation — see roomPresence()
+  // in realtime/socket.js. Portal shows repOnline, internal shows customerOnline.
+  const [presence, setPresence] = useState({ customerOnline: false, repOnline: false });
   const socketRef = useRef(null);
   const listRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    setActiveConversationId(conversationId);
 
     fetchHistory(conversationId)
       .then((history) => {
@@ -39,34 +45,60 @@ const ChatPanel = ({
       })
       .catch(() => {});
 
-    const socket = connectChatSocket(token, audience);
+    const socket = acquireChatSocket(token, audience);
     socketRef.current = socket;
 
-    socket.on('connect', () => {
+    const handleConnect = () => {
       setIsConnected(true);
       socket.emit('chat:join', { conversationId }, (res) => {
-        if (!res?.ok) setIsConnected(false);
+        if (!res?.ok) {
+          setIsConnected(false);
+          return;
+        }
+        if (res.presence) setPresence(res.presence);
       });
-    });
+    };
 
-    socket.on('disconnect', () => setIsConnected(false));
+    const handleDisconnect = () => setIsConnected(false);
 
-    socket.on('chat:message', (message) => {
+    const handleMessage = (message) => {
       if (message.conversationId !== conversationId) return;
       setMessages((prev) => [...prev, message]);
-    });
+    };
 
-    socket.on('chat:assigned', (payload) => {
+    const handleAssigned = (payload) => {
       if (payload.conversationId === conversationId) onAssigned?.(payload);
-    });
+    };
 
-    socket.on('chat:participant:added', (payload) => {
+    const handleParticipantAdded = (payload) => {
       if (payload.conversationId === conversationId) onParticipantAdded?.(payload);
-    });
+    };
+
+    const handlePresence = (payload) => {
+      if (payload.conversationId === conversationId) setPresence(payload);
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('chat:message', handleMessage);
+    socket.on('chat:assigned', handleAssigned);
+    socket.on('chat:participant:added', handleParticipantAdded);
+    socket.on('chat:presence', handlePresence);
+
+    // The shared socket may already be connected (another consumer opened
+    // it first) — 'connect' won't fire again, so join explicitly this time.
+    if (socket.connected) handleConnect();
 
     return () => {
       cancelled = true;
-      socket.disconnect();
+      setActiveConversationId(null);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('chat:message', handleMessage);
+      socket.off('chat:assigned', handleAssigned);
+      socket.off('chat:participant:added', handleParticipantAdded);
+      socket.off('chat:presence', handlePresence);
+      releaseChatSocket(audience);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, token, audience]);
@@ -106,7 +138,15 @@ const ChatPanel = ({
               {audience === 'portal' ? 'Netrix Systems Support' : 'Customer Thread'}
             </p>
             <p className="text-[10px] text-slate-400">
-              {isConnected ? 'Real-time sync active' : 'Connecting to socket…'}
+              {!isConnected
+                ? 'Connecting to socket…'
+                : audience === 'portal'
+                  ? presence.repOnline
+                    ? 'Our team is online'
+                    : 'Our team will reply when back online'
+                  : presence.customerOnline
+                    ? 'Customer is online'
+                    : 'Customer is away'}
             </p>
           </div>
         </div>

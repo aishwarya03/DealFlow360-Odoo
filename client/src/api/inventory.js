@@ -10,6 +10,11 @@ export const listLowStock = async () => {
   return res.data.data.stock;
 };
 
+export const updateStock = async (payload) => {
+  const res = await apiClient.put('/api/internal/inventory', payload);
+  return res.data.data.stock;
+};
+
 // Preview for the add-to-quotation flow: how a given quantity of this
 // product would split across warehouses right now (greedy, largest-
 // available-first — see server inventory.service.js's computeAllocation).

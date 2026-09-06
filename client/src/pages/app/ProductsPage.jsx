@@ -184,7 +184,9 @@ const ProductsPage = () => {
       render: (row) =>
         row.imageUrl ? (
           <img
-            src={`${import.meta.env.VITE_API_URL}${row.imageUrl}`}
+            src={row.imageUrl.startsWith('data:') || row.imageUrl.startsWith('http')
+              ? row.imageUrl
+              : `${import.meta.env.VITE_API_URL}${row.imageUrl}`}
             alt=""
             className="size-8 rounded-md border border-slate-200 object-cover"
           />

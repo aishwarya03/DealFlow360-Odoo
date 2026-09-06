@@ -119,7 +119,7 @@ const FileUpload = ({
                 <span>Upload an image</span>
               </p>
               <p className="text-[11px] text-slate-400">
-                Drag and drop or browse (PNG, JPG, WebP)
+                Drag and drop or browse (PNG, JPG, WebP, max 1 MB)
               </p>
             </div>
           )}

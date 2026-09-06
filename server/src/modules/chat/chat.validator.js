@@ -5,3 +5,7 @@ import { z } from 'zod';
 export const addParticipantSchema = z.object({
   userId: z.number().int().positive(),
 });
+
+export const setPresenceSchema = z.object({
+  away: z.boolean(),
+});

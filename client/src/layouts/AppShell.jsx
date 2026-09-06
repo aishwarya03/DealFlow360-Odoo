@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
-import { LogOut, Search } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Bell, LogOut, Search, Wifi, WifiOff } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { getToken } from '../api/client';
 import CommandPalette from '../components/CommandPalette';
 import Logo from '../components/Logo';
 import { useAuth } from '../hooks/useAuth';
+import { useChatNotifications } from '../hooks/useChatNotifications';
 import { cn } from '../lib/cn';
 import { TONE_CLASSES } from '../lib/status';
 import { navForRole, ROLES } from '../lib/roles';
+
+const CAN_TOGGLE_CHAT_PRESENCE = ['SALES_REP', 'SALES_MANAGER'];
 
 /*
  * The internal shell — a tool, not a document (docs/DESIGN_SYSTEM.md
@@ -15,7 +19,7 @@ import { navForRole, ROLES } from '../lib/roles';
  * roles down to what this user can reach; violet appears only on the
  * active item and the logo, never as page-wide color.
  */
-const NavSection = ({ title, items }) => {
+const NavSection = ({ title, items, badgeCounts = {} }) => {
   if (!items.length) return null;
 
   return (
@@ -45,6 +49,11 @@ const NavSection = ({ title, items }) => {
                 Soon
               </span>
             )}
+            {badgeCounts[key] > 0 && (
+              <span className="flex size-4 items-center justify-center rounded-full bg-brand-600 text-[10px] font-semibold text-white">
+                {badgeCounts[key] > 9 ? '9+' : badgeCounts[key]}
+              </span>
+            )}
           </NavLink>
         ))}
       </div>
@@ -54,10 +63,28 @@ const NavSection = ({ title, items }) => {
 
 const AppShell = () => {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const items = navForRole(user.role);
   const workspaceItems = items.filter((item) => item.group === 'Workspace');
   const configItems = items.filter((item) => item.group === 'Configuration');
+
+  const canTogglePresence = CAN_TOGGLE_CHAT_PRESENCE.includes(user.role);
+  const { unreadCount, clearUnread, isAvailable, setAvailability } = useChatNotifications({
+    token: getToken(),
+    audience: 'internal',
+    enabled: CAN_TOGGLE_CHAT_PRESENCE.includes(user.role),
+    describeMessage: useCallback(
+      (message) => `New message from ${message.senderCustomer?.name ?? 'a customer'}`,
+      []
+    ),
+  });
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/workspace/chat')) clearUnread();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // Global hotkey Ctrl+K / Cmd+K
   useEffect(() => {
@@ -105,6 +132,40 @@ const AppShell = () => {
         </nav>
 
         <div className="border-t border-slate-200 p-3">
+          {canTogglePresence && (
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAvailability(!isAvailable)}
+                title={isAvailable ? 'Set chat status to offline' : 'Set chat status to online'}
+                className={cn(
+                  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-xs font-medium transition-colors',
+                  isAvailable
+                    ? 'text-emerald-700 hover:bg-emerald-50'
+                    : 'text-slate-500 hover:bg-slate-100'
+                )}
+              >
+                {isAvailable ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}
+                <span>{isAvailable ? 'Online' : 'Offline'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearUnread();
+                  if (!location.pathname.startsWith('/workspace/chat')) navigate('/workspace/chat');
+                }}
+                title="Chat notifications"
+                className="relative flex size-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <Bell className="size-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-brand-600 text-[10px] font-semibold text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
               {user.name.slice(0, 1).toUpperCase()}

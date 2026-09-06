@@ -21,6 +21,16 @@ export const listMyChatMessages = async (conversationId) => {
 
 // ── Internal (staff) ─────────────────────────────────────────────────────
 
+export const getChatPresence = async () => {
+  const { data } = await apiClient.get('/api/internal/chat/presence');
+  return data.data;
+};
+
+export const setChatPresence = async (away) => {
+  const { data } = await apiClient.patch('/api/internal/chat/presence', { away });
+  return data.data;
+};
+
 export const listChatQueue = async () => {
   const { data } = await apiClient.get('/api/internal/chat/queue');
   return data.data.conversations;

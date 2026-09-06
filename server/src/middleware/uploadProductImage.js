@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,21 +8,12 @@ import ApiError from '../utils/apiError.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// server/uploads/products, resolved from this file rather than process.cwd()
-// so it works the same whether the app is started from server/ or elsewhere.
+// Retained for cleanup of images uploaded before base64 storage was introduced.
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads', 'products');
 fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_BYTES = 5 * 1024 * 1024;
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_ROOT),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
+export const MAX_IMAGE_BYTES = 1024 * 1024;
 
 const fileFilter = (req, file, cb) => {
   if (!ALLOWED_MIME.has(file.mimetype)) {
@@ -32,7 +22,11 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: MAX_BYTES } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: MAX_IMAGE_BYTES },
+});
 
 // Wraps multer's single-file middleware so its errors (wrong type, too large)
 // go through the same ApiError -> errorHandler path as everything else,
@@ -42,7 +36,7 @@ const uploadProductImage = (req, res, next) => {
     if (!err) return next();
 
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return next(ApiError.badRequest('Image must be 5MB or smaller'));
+      return next(ApiError.badRequest('Image must be 1MB or smaller'));
     }
     return next(err);
   });

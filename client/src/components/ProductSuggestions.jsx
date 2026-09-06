@@ -7,7 +7,9 @@ import { formatINR } from '../lib/currency';
 const GROUP_LABEL = { CROSS_SELL: 'Frequently bought together', UPSELL: 'You might prefer' };
 
 const resolveImageUrl = (imageUrl) =>
-  !imageUrl ? null : imageUrl.startsWith('http') ? imageUrl : `${import.meta.env.VITE_API_URL}${imageUrl}`;
+  !imageUrl || imageUrl.startsWith('data:') || imageUrl.startsWith('http')
+    ? imageUrl || null
+    : `${import.meta.env.VITE_API_URL}${imageUrl}`;
 
 /*
  * Cross-sell/upsell suggestions for whatever is currently in view — one

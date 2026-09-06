@@ -19,7 +19,7 @@ const ProductCard = ({ product, onAdd, onRequestQuote }) => {
   const cartQuantity = items.find((i) => i.id === product.id)?.quantity ?? 0;
   const inCart = cartQuantity > 0;
   const Icon = CATEGORY_ICONS[product.category] || Package;
-  const imageUrl = product.imageUrl?.startsWith('http')
+  const imageUrl = product.imageUrl?.startsWith('data:') || product.imageUrl?.startsWith('http')
     ? product.imageUrl
     : product.imageUrl
       ? `${import.meta.env.VITE_API_URL}${product.imageUrl}`

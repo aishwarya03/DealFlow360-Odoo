@@ -3,6 +3,15 @@ import * as chatService from './chat.service.js';
 
 // ── Internal (staff) ─────────────────────────────────────────────────────
 
+export const getPresence = async (req, res) => {
+  sendSuccess(res, 'Presence', chatService.getMyPresence(req.user.id));
+};
+
+export const setPresence = async (req, res) => {
+  const result = chatService.setMyPresence(req.user.id, req.body.away);
+  sendSuccess(res, result.away ? 'Marked away' : 'Marked available', result);
+};
+
 export const listQueue = async (req, res) => {
   const conversations = await chatService.listQueue();
   sendSuccess(res, 'Unclaimed chats', { conversations, count: conversations.length });

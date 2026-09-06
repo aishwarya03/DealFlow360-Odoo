@@ -5,7 +5,7 @@ import authorize from '../../middleware/authorize.js';
 import parseId from '../../middleware/parseId.js';
 import validate from '../../middleware/validate.js';
 import * as chatController from './chat.controller.js';
-import { addParticipantSchema } from './chat.validator.js';
+import { addParticipantSchema, setPresenceSchema } from './chat.validator.js';
 
 // Mounted at /api/internal/chat by app.js.
 //
@@ -15,6 +15,9 @@ import { addParticipantSchema } from './chat.validator.js';
 const router = Router();
 
 router.use(authenticateInternal, authorize('SALES_REP', 'SALES_MANAGER'));
+
+router.get('/presence', chatController.getPresence);
+router.patch('/presence', validate(setPresenceSchema), chatController.setPresence);
 
 router.get('/queue', chatController.listQueue);
 router.get('/mine', chatController.listMine);

@@ -110,6 +110,16 @@ export const startOrGetConversation = async (quotationId, customer) => {
   };
 };
 
+// Read by the rep's own toggle on load, and flipped by the same toggle —
+// deliberately thin wrappers so callers only ever import chat.service.js,
+// never presence.service.js directly.
+export const getMyPresence = (userId) => ({ away: presence.isAway(userId) });
+
+export const setMyPresence = (userId, away) => {
+  presence.setAway(userId, away);
+  return { away };
+};
+
 export const listQueue = async () =>
   (
     await prisma.chatConversation.findMany({

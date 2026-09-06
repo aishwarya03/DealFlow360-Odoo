@@ -12,6 +12,7 @@ import {
   listMyChats,
 } from '../../api/chat';
 import { getToken } from '../../api/client';
+import { acquireChatSocket, releaseChatSocket } from '../../lib/socket';
 import Button from '../../components/Button';
 import ChatPanel from '../../components/ChatPanel';
 import DetailSection from '../../components/DetailSection';
@@ -49,6 +50,17 @@ const ChatInboxPage = () => {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    const socket = acquireChatSocket(getToken(), 'internal');
+    const handleQueueUpdated = () => load();
+
+    socket.on('chat:queue:updated', handleQueueUpdated);
+    return () => {
+      socket.off('chat:queue:updated', handleQueueUpdated);
+      releaseChatSocket('internal');
+    };
+  }, []);
 
   // Arriving from "View chat" on a quotation page: jump straight to that
   // conversation once the lists have loaded, whether it's already claimed
