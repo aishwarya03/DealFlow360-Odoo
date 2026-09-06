@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 
 import Button from '../../components/Button';
 import ConfigModal from '../../components/ConfigModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import DataTable from '../../components/DataTable';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
@@ -18,12 +19,15 @@ const tierTone = {
 
 const CAN_CREATE = ['ADMIN', 'SALES_REP', 'SALES_MANAGER'];
 
+const emptyForm = () => ({ name: '', email: '', contactName: '', phone: '' });
+
 const CustomersPage = () => {
   const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({});
+  const [confirmCustomer, setConfirmCustomer] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -34,8 +38,8 @@ const CustomersPage = () => {
   }, []);
 
   const openForm = (customer = null) => {
-    setEditing(customer ?? {});
-    setForm(customer ? { name: customer.name, email: customer.email, contactName: customer.contactName ?? '', phone: customer.phone ?? '' } : { name: '', email: '', contactName: '', phone: '' });
+    setEditing(customer ? { id: customer.id } : {});
+    setForm(customer ? { name: customer.name, email: customer.email, contactName: customer.contactName ?? '', phone: customer.phone ?? '' } : emptyForm());
   };
   const change = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const save = async (event) => {
@@ -47,11 +51,18 @@ const CustomersPage = () => {
     } catch (error) { toast.error(error.response?.data?.message ?? 'Could not save customer'); }
     finally { setIsSaving(false); }
   };
-  const remove = async (customer) => {
-    if (!window.confirm(`Deactivate ${customer.name}?`)) return;
-    try { const updated = await deactivateCustomer(customer.id); setCustomers((current) => current.map((item) => item.id === updated.id ? updated : item)); toast.success('Customer deactivated'); }
-    catch (error) { toast.error(error.response?.data?.message ?? 'Could not deactivate customer'); }
+  const executeDeactivate = async () => {
+    if (!confirmCustomer) return;
+    try {
+      const updated = await deactivateCustomer(confirmCustomer.id);
+      setCustomers((current) => current.map((item) => item.id === updated.id ? updated : item));
+      toast.success('Customer deactivated');
+      setConfirmCustomer(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message ?? 'Could not deactivate customer');
+    }
   };
+  const remove = (customer) => setConfirmCustomer(customer);
 
   const columns = [
     { key: 'name', header: 'Company', render: (row) => <span className="font-medium">{row.name}</span> },
@@ -104,6 +115,18 @@ const CustomersPage = () => {
         emptyIcon={Users}
         emptyTitle={isLoading ? 'Loading…' : 'No customers yet'}
       />
+
+      {confirmCustomer && (
+        <ConfirmDialog
+          isOpen={true}
+          title={`Deactivate ${confirmCustomer.name}?`}
+          message="This will hide the customer from active quotation lookups."
+          tone="danger"
+          confirmLabel="Deactivate"
+          onConfirm={executeDeactivate}
+          onClose={() => setConfirmCustomer(null)}
+        />
+      )}
     </div>
   );
 };

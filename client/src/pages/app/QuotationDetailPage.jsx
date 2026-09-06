@@ -6,13 +6,15 @@ import toast from 'react-hot-toast';
 import { actOnStep } from '../../api/approvals';
 import { confirmQuotation, getQuotation, submitQuotation, withdrawQuotation } from '../../api/quotations';
 import Button from '../../components/Button';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import DataTable from '../../components/DataTable';
 import DetailSection from '../../components/DetailSection';
+import DiscountRiskMeter from '../../components/DiscountRiskMeter';
 import EditQuotationLinesModal from '../../components/EditQuotationLinesModal';
-import Logo from '../../components/Logo';
 import NoteModal from '../../components/NoteModal';
 import PageHeader from '../../components/PageHeader';
 import QuotationFormModal from '../../components/QuotationFormModal';
+import { Skeleton, SkeletonTable } from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import StepProgress from '../../components/StepProgress';
 import { useAuth } from '../../hooks/useAuth';
@@ -52,6 +54,7 @@ const QuotationDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [noteModal, setNoteModal] = useState(null); // { title, required, run(note) }
+  const [confirmModal, setConfirmModal] = useState(null); // { title, message, tone, onConfirm }
   const [isRequoting, setIsRequoting] = useState(false);
   const [isEditingLines, setIsEditingLines] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -87,7 +90,23 @@ const QuotationDetailPage = () => {
     }
   };
 
-  if (isLoading) return <Logo className="mx-auto mt-20 animate-pulse" />;
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-8 w-48" />
+          </div>
+          <Skeleton className="h-9 w-36 rounded-md" />
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <SkeletonTable rows={4} cols={5} />
+        </div>
+      </div>
+    );
+  }
+
   if (error || !quotation) {
     return (
       <div>
@@ -274,6 +293,19 @@ const QuotationDetailPage = () => {
         />
       )}
 
+      {confirmModal && (
+        <ConfirmDialog
+          isOpen={true}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          tone={confirmModal.tone}
+          isLoading={isBusy}
+          onConfirm={confirmModal.onConfirm}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
+
       {isEditingLines && (
         <EditQuotationLinesModal
           quotation={quotation}
@@ -286,6 +318,17 @@ const QuotationDetailPage = () => {
       )}
 
       <div className="space-y-4">
+        {quotation.lines?.length > 0 && (
+          <DiscountRiskMeter
+            discountPercent={
+              quotation.lines.reduce(
+                (sum, l) => sum + (Number(l.discountPercent) || 0),
+                0
+              ) / quotation.lines.length
+            }
+          />
+        )}
+
         <DetailSection
           title="Lines"
           padded={false}
@@ -346,8 +389,18 @@ const QuotationDetailPage = () => {
                         variant="success"
                         disabled={isBusy}
                         onClick={() => {
-                          if (!window.confirm('Approve this step?')) return;
-                          runAction('Step approved', () => actOnStep(request.id, myActiveStep.id, { action: 'APPROVE' }));
+                          setConfirmModal({
+                            title: 'Approve this quotation step?',
+                            message: `You are approving as ${ROLE_LABEL[myActiveStep.role] ?? myActiveStep.role}. Once all required steps are approved, the quotation will advance to Approved.`,
+                            confirmLabel: 'Approve Step',
+                            tone: 'success',
+                            onConfirm: async () => {
+                              setConfirmModal(null);
+                              runAction('Step approved', () =>
+                                actOnStep(request.id, myActiveStep.id, { action: 'APPROVE' })
+                              );
+                            },
+                          });
                         }}
                       >
                         Approve

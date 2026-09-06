@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import DataTable from '../../components/DataTable';
 import FilterBar from '../../components/FilterBar';
 import PageHeader from '../../components/PageHeader';
+import { SkeletonTable } from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { listLowStock, listStock } from '../../api/inventory';
 
@@ -26,8 +27,10 @@ const InventoryPage = () => {
   // derived (loadedFilter !== filter) instead of set synchronously inside
   // the effect — the latter causes an extra cascading render.
   const [loadedFilter, setLoadedFilter] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
+    setError(false);
     const loader = filter === 'low' ? listLowStock() : listStock();
 
     loader
@@ -35,10 +38,13 @@ const InventoryPage = () => {
         setStock(rows);
         setLoadedFilter(filter);
       })
-      .catch(() => toast.error('Could not load stock'));
+      .catch(() => {
+        toast.error('Could not load stock');
+        setError(true);
+      });
   }, [filter]);
 
-  const isLoading = loadedFilter !== filter;
+  const isLoading = loadedFilter !== filter && !error;
 
   const columns = [
     {
@@ -66,24 +72,36 @@ const InventoryPage = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Inventory"
         subtitle="Stock of every product across every warehouse."
       />
 
-      <FilterBar options={FILTERS} value={filter} onChange={setFilter} className="mb-4" />
+      <FilterBar options={FILTERS} value={filter} onChange={setFilter} />
 
-      <DataTable
-        columns={columns}
-        rows={isLoading ? [] : stock}
-        getRowKey={(row) => row.id}
-        emptyIcon={Boxes}
-        emptyTitle={isLoading ? 'Loading…' : 'Nothing to show'}
-        emptyDescription={
-          filter === 'low' ? 'No product is below its reorder point right now.' : undefined
-        }
-      />
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Couldn&apos;t load inventory. Please try again in a moment.
+        </div>
+      ) : isLoading ? (
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <SkeletonTable rows={6} cols={6} />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={stock}
+          getRowKey={(row) => row.id}
+          emptyIcon={Boxes}
+          emptyTitle="Nothing to show"
+          emptyDescription={
+            filter === 'low'
+              ? 'No product is below its reorder point right now.'
+              : 'Stock will appear here once inventory is recorded for a warehouse.'
+          }
+        />
+      )}
     </div>
   );
 };

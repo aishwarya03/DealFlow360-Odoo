@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import Button from '../../components/Button';
+import CustomSelect from '../../components/CustomSelect';
 import DetailSection from '../../components/DetailSection';
 import Logo from '../../components/Logo';
 import PageHeader from '../../components/PageHeader';
@@ -254,20 +255,18 @@ const SubscriptionDetailPage = () => {
         {!isCancelled && (
           <DetailSection title="Change billing frequency" description="Switches the plan this product bills against — proration covers the rest of the current period.">
             <div className="flex items-end gap-3">
-              <div className="w-40">
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">New frequency</label>
-                <select
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              <div className="w-52">
+                <CustomSelect
+                  label="New frequency"
                   value={newCycle}
-                  onChange={(e) => runPlanPreview(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {Object.entries(CYCLE_LABEL).map(([value, label]) => (
-                    <option key={value} value={value} disabled={value === subscription.cycle}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => runPlanPreview(val)}
+                  placeholder="Select cycle…"
+                  options={Object.entries(CYCLE_LABEL).map(([value, label]) => ({
+                    value,
+                    label,
+                    disabled: value === subscription.cycle,
+                  }))}
+                />
               </div>
               {planPreview && (
                 <Button size="sm" disabled={isBusy} onClick={confirmPlanChange}>
@@ -282,16 +281,16 @@ const SubscriptionDetailPage = () => {
         {!isCancelled && (
           <DetailSection title="Cancel subscription" description="Ends this recurring line — immediately with a credit for unused days, or at the end of the current period with no refund.">
             <div className="flex items-end gap-3">
-              <div className="w-56">
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">When</label>
-                <select
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              <div className="w-64">
+                <CustomSelect
+                  label="When to cancel"
                   value={cancelMode}
-                  onChange={(e) => runCancelPreview(e.target.value)}
-                >
-                  <option value="immediate">Immediately</option>
-                  <option value="period_end">At the end of the current period</option>
-                </select>
+                  onChange={(val) => runCancelPreview(val)}
+                  options={[
+                    { value: 'immediate', label: 'Immediately (with refund credit)' },
+                    { value: 'period_end', label: 'At the end of current period' },
+                  ]}
+                />
               </div>
               <Button size="sm" variant="secondary" onClick={() => runCancelPreview(cancelMode)}>
                 Preview

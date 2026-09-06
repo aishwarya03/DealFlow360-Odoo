@@ -50,6 +50,17 @@
     outline: 2px solid var(--color-brand-600);
     outline-offset: 2px;
   }
+
+  /*
+   * Tailwind's preflight resets buttons to the browser default (arrow)
+   * cursor, not pointer — every clickable button in the app needs this
+   * explicitly, so it belongs here once rather than as a class scattered
+   * across every component.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -61,4 +72,34 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * Motion utilities — small, self-contained keyframe set for overlays
+ * (dialogs, popovers, toasts, dropdowns). No animation plugin is installed,
+ * so `animate-in`/`fade-in`/`zoom-in-95` (tailwindcss-animate classnames)
+ * silently do nothing here; these are the real equivalents.
+ */
+@layer utilities {
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes zoom-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in { animation: fade-in 0.15s ease-out; }
+  .animate-zoom-in { animation: zoom-in 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+  .animate-slide-up { animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+  .animate-slide-down { animation: slide-down 0.15s ease-out; }
 }

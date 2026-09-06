@@ -5,7 +5,9 @@ import toast from 'react-hot-toast';
 import { createRecommendation, deactivateRecommendation, listRecommendations } from '../api/recommendations';
 import { searchProducts } from '../lib/quotationLines';
 import Button from './Button';
+import CustomSelect from './CustomSelect';
 import SearchSelect from './SearchSelect';
+import Switch from './Switch';
 
 const TYPE_LABEL = { CROSS_SELL: 'Cross-sell', UPSELL: 'Upsell' };
 
@@ -117,27 +119,25 @@ const ProductRecommendationsPanel = ({ productId }) => {
         </div>
 
         <div className="col-span-3">
-          <label className="mb-1.5 block text-xs font-medium text-slate-700">As</label>
-          <select
+          <CustomSelect
+            label="As"
             value={type}
-            onChange={(event) => setType(event.target.value)}
-            className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none focus:border-brand-600"
-          >
-            <option value="CROSS_SELL">Cross-sell</option>
-            <option value="UPSELL">Upsell</option>
-          </select>
+            onChange={(val) => setType(val)}
+            size="sm"
+            options={[
+              { value: 'CROSS_SELL', label: 'Cross-sell' },
+              { value: 'UPSELL', label: 'Upsell' },
+            ]}
+          />
         </div>
 
-        <div className="col-span-2 flex items-center gap-1.5 pb-2">
-          <input
-            type="checkbox"
-            id="rec-promoted"
+        <div className="col-span-2 flex items-center pt-5">
+          <Switch
             checked={promoted}
-            onChange={(event) => setPromoted(event.target.checked)}
+            onChange={(checked) => setPromoted(checked)}
+            label="Featured"
+            size="sm"
           />
-          <label htmlFor="rec-promoted" className="text-xs text-slate-600">
-            Featured
-          </label>
         </div>
 
         <div className="col-span-1">

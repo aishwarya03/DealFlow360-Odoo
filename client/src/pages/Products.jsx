@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  AlertCircle,
   ArrowRight,
   Boxes,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  RefreshCw,
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
 import ProductCard from '../components/ProductCard';
 import Reveal from '../components/Reveal';
+import { Skeleton } from '../components/Skeleton';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { listPublicProducts } from '../api/products';
@@ -22,6 +25,19 @@ import { NETRIX_TAG, useBrandTag } from '../hooks/useBrandTag';
 import { useCart } from '../hooks/useCart';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { cn } from '../lib/cn';
+
+const ProductCardSkeleton = () => (
+  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <Skeleton className="aspect-[1.25/1] w-full rounded-none" />
+    <div className="space-y-3 p-5">
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="h-5 w-3/4" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-6 w-24" />
+      <Skeleton className="h-9 w-full" />
+    </div>
+  </div>
+);
 
 const ALL = 'all';
 const PAGE_SIZE = 12;
@@ -40,6 +56,8 @@ const Products = () => {
   const [categories, setCategories] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setPage(1);
@@ -48,6 +66,7 @@ const Products = () => {
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setHasError(false);
 
     listPublicProducts({
       page,
@@ -61,13 +80,17 @@ const Products = () => {
         setPagination(result.pagination);
         setCategories(result.categories?.map((category) => category.name) ?? []);
       })
-      .catch(() => !cancelled && toast.error('Could not load products'))
+      .catch(() => {
+        if (cancelled) return;
+        setHasError(true);
+        toast.error('Could not load products');
+      })
       .finally(() => !cancelled && setIsLoading(false));
 
     return () => {
       cancelled = true;
     };
-  }, [page, debouncedSearch, activeCategory]);
+  }, [page, debouncedSearch, activeCategory, reloadKey]);
 
   const handleAdd = (product) => {
     addItem(product, 1);
@@ -187,8 +210,22 @@ const Products = () => {
             </div>
           </div>
         {isLoading ? (
-          <div className="py-16 text-center text-sm text-slate-500">
-            Loading products…
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : hasError ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-6 py-16 text-center">
+            <AlertCircle className="size-8 text-red-500" aria-hidden="true" />
+            <p className="text-base font-semibold text-red-700">Couldn&apos;t load the catalogue</p>
+            <p className="max-w-sm text-sm leading-relaxed text-red-600">
+              Something went wrong on our end. Please try again in a moment.
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+              <RefreshCw className="size-4" aria-hidden="true" />
+              Try again
+            </Button>
           </div>
         ) : products.length === 0 ? (
           <EmptyState

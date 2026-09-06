@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import DataTable from '../../components/DataTable';
 import FilterBar from '../../components/FilterBar';
 import PageHeader from '../../components/PageHeader';
+import { SkeletonTable } from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { listApprovalRequests } from '../../api/approvals';
 
@@ -29,11 +30,17 @@ const ApprovalsPage = () => {
   const [requests, setRequests] = useState([]);
   const [status, setStatus] = useState('PENDING');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
+    setIsLoading(true);
+    setError(false);
     listApprovalRequests(status ? { status } : {})
       .then(setRequests)
-      .catch(() => toast.error('Could not load approvals'))
+      .catch(() => {
+        toast.error('Could not load approvals');
+        setError(true);
+      })
       .finally(() => setIsLoading(false));
   }, [status]);
 
@@ -62,20 +69,33 @@ const ApprovalsPage = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title="Approvals" subtitle="Quotations routed to you for a discount-governance decision." />
 
-      <div className="mb-4">
-        <FilterBar options={FILTERS} value={status} onChange={setStatus} />
-      </div>
+      <FilterBar options={FILTERS} value={status} onChange={setStatus} />
 
-      <DataTable
-        columns={columns}
-        rows={isLoading ? [] : requests}
-        onRowClick={(row) => navigate(`/workspace/quotations/${row.quotation.id}`)}
-        emptyIcon={ShieldCheck}
-        emptyTitle={isLoading ? 'Loading…' : 'Nothing waiting on you'}
-      />
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Couldn&apos;t load approvals. Please try again in a moment.
+        </div>
+      ) : isLoading ? (
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <SkeletonTable rows={5} cols={6} />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={requests}
+          onRowClick={(row) => navigate(`/workspace/quotations/${row.quotation.id}`)}
+          emptyIcon={ShieldCheck}
+          emptyTitle={status === 'PENDING' ? 'Nothing waiting on you' : 'No approvals match this filter'}
+          emptyDescription={
+            status === 'PENDING'
+              ? 'Every quotation routed to your role is currently clear or auto-approved.'
+              : 'Try a different status to see more of the approval history.'
+          }
+        />
+      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import DataTable from '../../components/DataTable';
 import FilterBar from '../../components/FilterBar';
 import PageHeader from '../../components/PageHeader';
+import { SkeletonTable } from '../../components/Skeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { listSubscriptions } from '../../api/subscriptions';
 import { formatINR } from '../../lib/currency';
@@ -28,12 +29,17 @@ const SubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
+    setError(false);
     listSubscriptions(status ? { status } : {})
       .then(setSubscriptions)
-      .catch(() => toast.error('Could not load subscriptions'))
+      .catch(() => {
+        toast.error('Could not load subscriptions');
+        setError(true);
+      })
       .finally(() => setIsLoading(false));
   }, [status]);
 
@@ -53,21 +59,33 @@ const SubscriptionsPage = () => {
   ];
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title="Subscriptions" subtitle="Every recurring line, its billing schedule, and where it stands." />
 
-      <div className="mb-4">
-        <FilterBar options={FILTERS} value={status} onChange={setStatus} />
-      </div>
+      <FilterBar options={FILTERS} value={status} onChange={setStatus} />
 
-      <DataTable
-        columns={columns}
-        rows={isLoading ? [] : subscriptions}
-        onRowClick={(row) => navigate(`/workspace/subscriptions/${row.id}`)}
-        emptyIcon={Repeat}
-        emptyTitle={isLoading ? 'Loading…' : 'No subscriptions yet'}
-        emptyDescription={isLoading ? undefined : 'A subscription appears here once a recurring quotation line is confirmed.'}
-      />
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Couldn&apos;t load subscriptions. Please try again in a moment.
+        </div>
+      ) : isLoading ? (
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <SkeletonTable rows={6} cols={7} />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={subscriptions}
+          onRowClick={(row) => navigate(`/workspace/subscriptions/${row.id}`)}
+          emptyIcon={Repeat}
+          emptyTitle={status ? 'No subscriptions match this filter' : 'No subscriptions yet'}
+          emptyDescription={
+            status
+              ? 'Try a different status, or clear the filter to see everything.'
+              : 'A subscription appears here once a recurring quotation line is confirmed.'
+          }
+        />
+      )}
     </div>
   );
 };

@@ -190,6 +190,21 @@ export const listQuotations = async (filters, actingUser) => {
       customer: { select: { id: true, name: true, tierId: true } },
       owner: { select: { id: true, name: true } },
       lines: true,
+      // Just enough to let a list/kanban view offer an inline "Approve" quick
+      // action without a second round-trip per card — only the currently
+      // open request, and only its ACTIVE step (no actedBy/history; that
+      // detail lives on the quotation's own page, see detailInclude below).
+      approvalRequests: {
+        where: { status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          steps: {
+            where: { status: 'ACTIVE' },
+            select: { id: true, role: true, status: true, sequence: true },
+          },
+        },
+      },
     },
     orderBy: { lastActivityAt: 'desc' },
   });
