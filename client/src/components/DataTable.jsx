@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 
 import { cn } from '../lib/cn';
 import EmptyState from './EmptyState';
@@ -7,16 +8,29 @@ import Pagination from './Pagination';
 /**
  * The workhorse — roughly 12 of the 18 screens are a list rendered through this.
  *
- * columns: [{ key, header, align, width, render(row), className, headerClassName }]
+ * columns: [{ key, header, align, width, render(row), className, headerClassName,
+ *              sortable, sortValue(row) }]
  *   align: 'left' (default) | 'right' | 'center'.  Numeric columns should use
  *   'right'; tabular-nums is applied globally to table cells in index.css.
+ *   sortable: true enables click-to-sort on that column's header. sortValue
+ *   defaults to row[col.key] — pass it whenever the cell renders something
+ *   other than the raw sort value (e.g. a formatted date or a nested field).
  *
  * pageSize: rows per page (client-side). Pass 0 to disable pagination.
+ * defaultSort: { key, direction } — sorted client-side before pagination.
  */
 const alignClass = {
   left: 'text-left',
   right: 'text-right',
   center: 'text-center',
+};
+
+const compareValues = (a, b) => {
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 };
 
 const DataTable = ({
@@ -30,9 +44,11 @@ const DataTable = ({
   emptyAction,
   className = '',
   pageSize = 10,
+  defaultSort,
 }) => {
   const shell = 'rounded-lg border border-slate-200 bg-white';
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState(defaultSort ?? null);
 
   const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
 
@@ -43,6 +59,24 @@ const DataTable = ({
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return rows;
+    const column = columns.find((col) => col.key === sort.key);
+    if (!column) return rows;
+    const accessor = column.sortValue ?? ((row) => row[column.key]);
+    const factor = sort.direction === 'desc' ? -1 : 1;
+    return [...rows].sort((a, b) => factor * compareValues(accessor(a), accessor(b)));
+  }, [rows, sort, columns]);
+
+  const toggleSort = (column) => {
+    if (!column.sortable) return;
+    setSort((current) => {
+      if (current?.key !== column.key) return { key: column.key, direction: 'asc' };
+      if (current.direction === 'asc') return { key: column.key, direction: 'desc' };
+      return null;
+    });
+  };
 
   if (!rows.length) {
     return (
@@ -57,7 +91,7 @@ const DataTable = ({
     );
   }
 
-  const pageRows = pageSize > 0 ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
+  const pageRows = pageSize > 0 ? sortedRows.slice((page - 1) * pageSize, page * pageSize) : sortedRows;
 
   return (
     <div className={cn(shell, className)}>
@@ -65,20 +99,40 @@ const DataTable = ({
         <table className="w-full min-w-max text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  scope="col"
-                  style={col.width ? { width: col.width } : undefined}
-                  className={cn(
-                    'px-4 py-2.5 text-xs font-medium tracking-wide text-slate-500 uppercase',
-                    alignClass[col.align] ?? alignClass.left,
-                    col.headerClassName
-                  )}
-                >
-                  {col.header}
-                </th>
-              ))}
+              {columns.map((col) => {
+                const isSorted = sort?.key === col.key;
+                const SortIcon = isSorted ? (sort.direction === 'asc' ? ArrowUp : ArrowDown) : ChevronsUpDown;
+
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    style={col.width ? { width: col.width } : undefined}
+                    className={cn(
+                      'px-4 py-2.5 text-xs font-medium tracking-wide text-slate-500 uppercase',
+                      alignClass[col.align] ?? alignClass.left,
+                      col.headerClassName
+                    )}
+                  >
+                    {col.sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(col)}
+                        className={cn(
+                          'inline-flex items-center gap-1 transition-colors hover:text-slate-700',
+                          col.align === 'right' && 'flex-row-reverse',
+                          isSorted && 'text-slate-700'
+                        )}
+                      >
+                        {col.header}
+                        <SortIcon className={cn('size-3.5', !isSorted && 'text-slate-300')} aria-hidden="true" />
+                      </button>
+                    ) : (
+                      col.header
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 

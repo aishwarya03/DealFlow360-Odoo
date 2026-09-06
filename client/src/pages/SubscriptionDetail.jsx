@@ -15,6 +15,8 @@ import {
   rejectRenewalInvoice,
 } from '../api/portal';
 import Button from '../components/Button';
+import ConfirmDialog from '../components/ConfirmDialog';
+import CustomSelect from '../components/CustomSelect';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import StatusBadge from '../components/StatusBadge';
@@ -71,6 +73,8 @@ const SubscriptionDetail = () => {
   const [planPreview, setPlanPreview] = useState(null);
   const [cancelMode, setCancelMode] = useState('immediate');
   const [cancelPreview, setCancelPreview] = useState(null);
+  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const load = () => {
     getMySubscription(id)
@@ -117,11 +121,11 @@ const SubscriptionDetail = () => {
   };
 
   const decline = async () => {
-    if (!window.confirm('Decline this renewal? The subscription will not continue.')) return;
     setIsBusy(true);
     try {
       setSubscription(await rejectRenewalInvoice(id, pendingInvoice.id));
       toast.success('Renewal declined');
+      setShowDeclineConfirm(false);
     } catch (err) {
       toast.error(err.response?.data?.message ?? 'Could not decline the renewal');
     } finally {
@@ -186,12 +190,12 @@ const SubscriptionDetail = () => {
   };
 
   const confirmCancel = async () => {
-    if (!window.confirm('Cancel this subscription?')) return;
     setIsBusy(true);
     try {
       setSubscription(await cancelMySubscription(id, cancelMode));
       setCancelPreview(null);
       toast.success('Subscription cancelled');
+      setShowCancelConfirm(false);
     } catch (err) {
       toast.error(err.response?.data?.message ?? 'Could not cancel this subscription');
     } finally {
@@ -233,7 +237,7 @@ const SubscriptionDetail = () => {
               <Button size="sm" variant="success" disabled={isBusy} onClick={approve}>
                 Approve & Pay
               </Button>
-              <Button size="sm" variant="danger" disabled={isBusy} onClick={decline}>
+              <Button size="sm" variant="danger" disabled={isBusy} onClick={() => setShowDeclineConfirm(true)}>
                 Decline
               </Button>
             </div>
@@ -285,20 +289,18 @@ const SubscriptionDetail = () => {
 
             <h2 className="mt-10 text-sm font-semibold text-slate-900">Change billing frequency</h2>
             <div className="mt-3 flex items-end gap-3">
-              <div className="w-40">
-                <label className="mb-1.5 block text-xs font-medium text-slate-600">New frequency</label>
-                <select
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              <div className="w-52">
+                <CustomSelect
+                  label="New frequency"
                   value={newCycle}
-                  onChange={(e) => runPlanPreview(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {Object.entries(CYCLE_LABEL).map(([value, label]) => (
-                    <option key={value} value={value} disabled={value === subscription.cycle}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => runPlanPreview(val)}
+                  placeholder="Select cycle…"
+                  options={Object.entries(CYCLE_LABEL).map(([value, label]) => ({
+                    value,
+                    label,
+                    disabled: value === subscription.cycle,
+                  }))}
+                />
               </div>
               {planPreview && (
                 <Button size="sm" disabled={isBusy} onClick={confirmPlanChange}>
@@ -313,22 +315,22 @@ const SubscriptionDetail = () => {
               Cancel immediately for a credit on unused days, or let it run to the end of what you've already paid for.
             </p>
             <div className="mt-3 flex items-end gap-3">
-              <div className="w-56">
-                <label className="mb-1.5 block text-xs font-medium text-slate-600">When</label>
-                <select
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              <div className="w-64">
+                <CustomSelect
+                  label="When to cancel"
                   value={cancelMode}
-                  onChange={(e) => runCancelPreview(e.target.value)}
-                >
-                  <option value="immediate">Immediately</option>
-                  <option value="period_end">At the end of the current period</option>
-                </select>
+                  onChange={(val) => runCancelPreview(val)}
+                  options={[
+                    { value: 'immediate', label: 'Immediately (with refund credit)' },
+                    { value: 'period_end', label: 'At the end of current period' },
+                  ]}
+                />
               </div>
               <Button size="sm" variant="secondary" onClick={() => runCancelPreview(cancelMode)}>
                 Preview
               </Button>
               {cancelPreview && (
-                <Button size="sm" variant="danger" disabled={isBusy} onClick={confirmCancel}>
+                <Button size="sm" variant="danger" disabled={isBusy} onClick={() => setShowCancelConfirm(true)}>
                   Cancel subscription
                 </Button>
               )}
@@ -339,6 +341,27 @@ const SubscriptionDetail = () => {
       </main>
 
       <SiteFooter />
+
+      <ConfirmDialog
+        isOpen={showDeclineConfirm}
+        title="Decline this renewal?"
+        message="The subscription will not continue into the next billing period."
+        tone="danger"
+        confirmLabel="Decline renewal"
+        isLoading={isBusy}
+        onConfirm={decline}
+        onClose={() => setShowDeclineConfirm(false)}
+      />
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Cancel this subscription?"
+        message="This action ends the recurring plan. You can review the effect above before confirming."
+        tone="danger"
+        confirmLabel="Cancel subscription"
+        isLoading={isBusy}
+        onConfirm={confirmCancel}
+        onClose={() => setShowCancelConfirm(false)}
+      />
     </div>
   );
 };

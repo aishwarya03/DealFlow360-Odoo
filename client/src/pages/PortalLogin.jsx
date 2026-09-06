@@ -58,11 +58,11 @@ const PortalLogin = () => {
       <SiteHeader />
 
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-16">
-        <Card>
-          <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+        <Card className="animate-slide-up p-7">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Sign in to your account
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1.5 text-base leading-relaxed text-slate-500">
             Track your quotations and pick up where you left off.
           </p>
 
@@ -93,7 +93,7 @@ const PortalLogin = () => {
           </form>
         </Card>
 
-        <p className="mt-4 text-center text-sm text-slate-500">
+        <p className="mt-5 text-center text-base text-slate-500">
           New here?{' '}
           <Link to="/request-quote" className="font-medium text-brand-600 hover:text-brand-700">
             Request a quote to create an account

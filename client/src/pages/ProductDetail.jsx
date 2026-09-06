@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ArrowUpRight, Minus, Package, Plus, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Minus, Package, PackageX, Plus, ShoppingCart } from 'lucide-react';
 
 import Button from '../components/Button';
+import EmptyState from '../components/EmptyState';
 import ProductSuggestions from '../components/ProductSuggestions';
+import { Skeleton } from '../components/Skeleton';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { CATEGORY_ICONS, CATEGORY_LABELS } from '../data/catalog';
@@ -106,9 +108,30 @@ const ProductDetail = () => {
         </Link>
 
         {isLoading ? (
-          <div className="py-24 text-center text-sm text-slate-500">Loading product…</div>
+          <div className="mt-6 grid gap-10 lg:grid-cols-2">
+            <Skeleton className="aspect-[1.25/1] w-full rounded-xl" />
+            <div className="space-y-4">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-9 w-40" />
+              <Skeleton className="h-11 w-full max-w-xs" />
+            </div>
+          </div>
         ) : !product ? (
-          <div className="py-24 text-center text-sm text-slate-500">Product not found.</div>
+          <div className="mt-10 rounded-lg border border-slate-200">
+            <EmptyState
+              icon={PackageX}
+              title="Product not found"
+              description="This item may have been removed from the catalogue, or the link is incorrect."
+              action={
+                <Link to="/products">
+                  <Button variant="secondary">Back to catalogue</Button>
+                </Link>
+              }
+            />
+          </div>
         ) : (
           <div className="mt-6 grid gap-10 lg:grid-cols-2">
             <div className="relative flex aspect-[1.25/1] items-center justify-center overflow-hidden rounded-xl bg-slate-100 p-10">

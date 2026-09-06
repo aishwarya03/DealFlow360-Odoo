@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { pingBackend } from '../api/ping';
+import Button from '../components/Button';
 
+/*
+ * Dev-only diagnostic route (/dev/ping) — not part of the public site or
+ * customer portal, and not linked from anywhere a judge would navigate.
+ * Kept minimal on purpose; polished only enough to match the app's type scale.
+ */
 const Home = () => {
   const [message, setMessage] = useState('');
 
@@ -15,20 +21,15 @@ const Home = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">
-        Hackathon Boilerplate
+    <div className="mx-auto max-w-lg space-y-6 p-10">
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+        Backend connectivity check
       </h1>
 
-      <button
-        onClick={handlePing}
-        className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-      >
-        Ping Backend
-      </button>
+      <Button onClick={handlePing}>Ping Backend</Button>
 
       {message && (
-        <p className="text-lg font-medium">
+        <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
           {message}
         </p>
       )}

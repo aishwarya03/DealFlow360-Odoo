@@ -2,12 +2,11 @@ import { Trash2 } from 'lucide-react';
 
 import { isStockedProductType, searchProducts } from '../lib/quotationLines';
 import { formatINR } from '../lib/currency';
+import CustomSelect from './CustomSelect';
 import Input from './Input';
 import SearchSelect from './SearchSelect';
+import Switch from './Switch';
 import WarehouseSplitEditor from './WarehouseSplitEditor';
-
-const selectClass =
-  'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none transition-colors focus:border-brand-600';
 
 // The repeating product/qty/discount/recurring row, shared by the new-
 // quotation form and the edit-lines modal so the two never drift apart.
@@ -61,32 +60,33 @@ const QuotationLineRows = ({
           />
         </div>
 
-        <div className="col-span-2">
+        <div className="col-span-2 space-y-1.5 pt-0.5">
           {line.productIsSubscribable && (
             <>
-              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={line.isRecurring}
-                  onChange={(event) =>
-                    onUpdateLine(index, {
-                      isRecurring: event.target.checked,
-                      recurringCycle: event.target.checked ? 'MONTHLY' : '',
-                    })
-                  }
-                />
-                Recurring
-              </label>
+              <Switch
+                checked={line.isRecurring}
+                onChange={(checked) =>
+                  onUpdateLine(index, {
+                    isRecurring: checked,
+                    recurringCycle: checked ? 'MONTHLY' : '',
+                  })
+                }
+                label="Recurring"
+                size="sm"
+              />
               {line.isRecurring && (
-                <select
+                <CustomSelect
                   value={line.recurringCycle}
-                  onChange={(event) => onUpdateLine(index, { recurringCycle: event.target.value })}
-                  className={selectClass}
-                >
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="QUARTERLY">Quarterly</option>
-                  <option value="YEARLY">Yearly</option>
-                </select>
+                  onChange={(val) =>
+                    onUpdateLine(index, { recurringCycle: val })
+                  }
+                  options={[
+                    { value: 'MONTHLY', label: 'Monthly' },
+                    { value: 'QUARTERLY', label: 'Quarterly' },
+                    { value: 'YEARLY', label: 'Yearly' },
+                  ]}
+                  size="sm"
+                />
               )}
             </>
           )}

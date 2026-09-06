@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 
 import Button from '../../components/Button';
 import ConfigModal from '../../components/ConfigModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import DataTable from '../../components/DataTable';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
@@ -17,6 +18,7 @@ const WarehousesPage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [confirmWarehouse, setConfirmWarehouse] = useState(null);
   const [form, setForm] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -42,11 +44,20 @@ const WarehousesPage = () => {
     } catch (error) { toast.error(error.response?.data?.message ?? 'Could not save warehouse'); }
     finally { setIsSaving(false); }
   };
-  const remove = async (warehouse) => {
-    if (!window.confirm(`Deactivate ${warehouse.name}?`)) return;
-    try { const updated = await deactivateWarehouse(warehouse.id); setWarehouses((current) => current.map((item) => item.id === updated.id ? updated : item)); toast.success('Warehouse deactivated'); }
-    catch (error) { toast.error(error.response?.data?.message ?? 'Could not deactivate warehouse'); }
+
+  const executeDeactivate = async () => {
+    if (!confirmWarehouse) return;
+    try {
+      const updated = await deactivateWarehouse(confirmWarehouse.id);
+      setWarehouses((current) => current.map((item) => item.id === updated.id ? updated : item));
+      toast.success('Warehouse deactivated');
+      setConfirmWarehouse(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message ?? 'Could not deactivate warehouse');
+    }
   };
+
+  const remove = (warehouse) => setConfirmWarehouse(warehouse);
 
   const columns = [
     { key: 'code', header: 'Code', render: (row) => <span className="font-medium">{row.code}</span> },
@@ -95,6 +106,18 @@ const WarehousesPage = () => {
         emptyIcon={WarehouseIcon}
         emptyTitle={isLoading ? 'Loading…' : 'No warehouses yet'}
       />
+
+      {confirmWarehouse && (
+        <ConfirmDialog
+          isOpen={true}
+          title={`Deactivate ${confirmWarehouse.name}?`}
+          message={`Warehouse code: ${confirmWarehouse.code}. Deactivating will remove it from future inventory allocations.`}
+          tone="danger"
+          confirmLabel="Deactivate"
+          onConfirm={executeDeactivate}
+          onClose={() => setConfirmWarehouse(null)}
+        />
+      )}
     </div>
   );
 };

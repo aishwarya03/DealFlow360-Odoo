@@ -1,6 +1,8 @@
-import { LogOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogOut, Search } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
+import CommandPalette from '../components/CommandPalette';
 import Logo from '../components/Logo';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/cn';
@@ -52,15 +54,49 @@ const NavSection = ({ title, items }) => {
 
 const AppShell = () => {
   const { user, logout } = useAuth();
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const items = navForRole(user.role);
   const workspaceItems = items.filter((item) => item.group === 'Workspace');
   const configItems = items.filter((item) => item.group === 'Configuration');
 
+  // Global hotkey Ctrl+K / Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-slate-50">
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+      />
+
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="flex h-14 items-center border-b border-slate-200 px-4">
           <Logo />
+        </div>
+
+        <div className="p-3 pb-0">
+          <button
+            type="button"
+            onClick={() => setIsPaletteOpen(true)}
+            className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="size-3.5 text-slate-400" />
+              <span>Search…</span>
+            </div>
+            <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+              ⌘K
+            </kbd>
+          </button>
         </div>
 
         <nav className="flex-1 space-y-6 overflow-y-auto p-3">

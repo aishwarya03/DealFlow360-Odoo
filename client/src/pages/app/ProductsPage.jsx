@@ -4,10 +4,14 @@ import toast from 'react-hot-toast';
 
 import Button from '../../components/Button';
 import ConfigModal from '../../components/ConfigModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import CustomSelect from '../../components/CustomSelect';
 import DataTable from '../../components/DataTable';
+import FileUpload from '../../components/FileUpload';
 import Input from '../../components/Input';
 import PageHeader from '../../components/PageHeader';
 import ProductRecommendationsPanel from '../../components/ProductRecommendationsPanel';
+import Switch from '../../components/Switch';
 import { useAuth } from '../../hooks/useAuth';
 import {
   listProducts,
@@ -55,6 +59,7 @@ const ProductsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({});
   const [imageFile, setImageFile] = useState(null);
+  const [confirmProduct, setConfirmProduct] = useState(null);
 
   useEffect(() => {
     listProducts({ includeInactive: 'true', limit: 100 })
@@ -65,7 +70,7 @@ const ProductsPage = () => {
     listVendors().then(setVendors).catch(() => toast.error('Could not load vendors'));
   }, []);
 
-  const openForm = (product = null) => {
+  const openForm = async (product = null) => {
     setEditing(product ?? {});
     setImageFile(null);
     setForm(product ? {
@@ -88,24 +93,31 @@ const ProductsPage = () => {
     });
 
     if (product?.id && product.isSubscribable) {
-      getProductSubscriptionPlans(product.id)
-        .then((plans) => {
-          const byCycle = Object.fromEntries(plans.map((plan) => [plan.cycle, plan.amount]));
-          setForm((current) => ({ ...current, plans: { ...emptyPlans(), ...byCycle } }));
-        })
-        .catch(() => toast.error('Could not load subscription plans'));
+      try {
+        const plans = await getProductSubscriptionPlans(product.id);
+        const mapped = emptyPlans();
+        plans.forEach((plan) => {
+          if (mapped[plan.cycle] !== undefined) mapped[plan.cycle] = plan.amount;
+        });
+        setForm((current) => ({ ...current, plans: mapped }));
+      } catch {
+        // Leave plans as empty inputs if loading fails.
+      }
     }
   };
 
-  const changePlan = (cycle) => (event) => setForm((current) => ({
-    ...current,
-    plans: { ...current.plans, [cycle]: event.target.value },
-  }));
+  const change = (key) => (event) => {
+    const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    setForm((current) => ({ ...current, [key]: value }));
+  };
 
-  const change = (key) => (event) => setForm((current) => ({
-    ...current,
-    [key]: event.target.type === 'checkbox' ? event.target.checked : event.target.value,
-  }));
+  const changePlan = (cycle) => (event) => {
+    const value = event.target.value;
+    setForm((current) => ({
+      ...current,
+      plans: { ...current.plans, [cycle]: value },
+    }));
+  };
 
   const save = async (event) => {
     event.preventDefault();
@@ -123,19 +135,24 @@ const ProductsPage = () => {
         costPrice: Number(form.costPrice),
         taxRate: Number(form.taxRate),
       };
-      const saved = editing.id ? await updateProduct(editing.id, payload) : await createProduct(payload);
-      const withImage = imageFile ? await uploadProductImage(saved.id, imageFile) : saved;
+      let saved = editing.id ? await updateProduct(editing.id, payload) : await createProduct(payload);
 
-      if (payload.isSubscribable) {
-        const plans = PLAN_CYCLES
-          .filter(({ key }) => form.plans[key] !== '' && form.plans[key] !== null && form.plans[key] !== undefined)
-          .map(({ key }) => ({ cycle: key, amount: Number(form.plans[key]) }));
-        if (plans.length > 0) await updateProductSubscriptionPlans(saved.id, plans);
+      if (imageFile) {
+        saved = await uploadProductImage(saved.id, imageFile);
       }
 
-      setProducts((current) => editing.id
-        ? current.map((product) => product.id === saved.id ? withImage : product)
-        : [withImage, ...current]);
+      if (form.isSubscribable) {
+        const plansPayload = Object.entries(form.plans || {})
+          .filter(([, amount]) => amount !== '' && amount !== null && !Number.isNaN(Number(amount)))
+          .map(([cycle, amount]) => ({ cycle, amount: Number(amount) }));
+        await updateProductSubscriptionPlans(saved.id, plansPayload);
+      }
+
+      setProducts((current) =>
+        editing.id
+          ? current.map((item) => (item.id === saved.id ? saved : item))
+          : [saved, ...current]
+      );
       toast.success(editing.id ? 'Product updated' : 'Product created');
       setEditing(null);
     } catch (error) {
@@ -145,16 +162,19 @@ const ProductsPage = () => {
     }
   };
 
-  const remove = async (product) => {
-    if (!window.confirm(`Deactivate ${product.name}?`)) return;
+  const executeDeactivate = async () => {
+    if (!confirmProduct) return;
     try {
-      const updated = await deactivateProduct(product.id);
+      const updated = await deactivateProduct(confirmProduct.id);
       setProducts((current) => current.map((item) => item.id === updated.id ? updated : item));
       toast.success('Product deactivated');
+      setConfirmProduct(null);
     } catch (error) {
       toast.error(error.response?.data?.message ?? 'Could not deactivate product');
     }
   };
+
+  const remove = (product) => setConfirmProduct(product);
 
   const columns = [
     {
@@ -249,16 +269,46 @@ const ProductsPage = () => {
             <Input label="SKU" name="sku" value={form.sku} onChange={change('sku')} required />
             <Input label="Name" name="name" value={form.name} onChange={change('name')} required />
             <Input label="Description" name="description" value={form.description} onChange={change('description')} />
-            <label className="text-sm font-medium text-slate-700">Category<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.categoryId} onChange={change('categoryId')} required><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.path ?? category.name}</option>)}</select></label>
-            <label className="text-sm font-medium text-slate-700">Type<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.productType} onChange={change('productType')}><option value="GOODS">Goods</option><option value="SERVICE">Service</option><option value="COMBO">Combo</option></select></label>
             <label className="text-sm font-medium text-slate-700">Preferred vendor<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.preferredVendorId} onChange={change('preferredVendorId')}><option value="">None</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}</select></label>
+            <CustomSelect
+              label="Category"
+              value={form.categoryId}
+              onChange={(val) => setForm((prev) => ({ ...prev, categoryId: val }))}
+              placeholder="Select category"
+              options={categories.map((c) => ({ value: c.id, label: c.path ?? c.name }))}
+              searchable
+            />
+            <CustomSelect
+              label="Type"
+              value={form.productType}
+              onChange={(val) => setForm((prev) => ({ ...prev, productType: val }))}
+              options={[
+                { value: 'GOODS', label: 'Goods (Hardware)' },
+                { value: 'SERVICE', label: 'Service' },
+                { value: 'COMBO', label: 'Combo Bundle' },
+              ]}
+            />
             <Input label="Unit" name="unit" value={form.unit} onChange={change('unit')} required />
             <Input label="List price" name="listPrice" type="number" min="0" value={form.listPrice} onChange={change('listPrice')} required />
             <Input label="Cost price" name="costPrice" type="number" min="0" value={form.costPrice} onChange={change('costPrice')} required />
             <Input label="Tax rate (%)" name="taxRate" type="number" min="0" max="100" value={form.taxRate} onChange={change('taxRate')} />
-            <Input label="Product image" name="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageFile(event.target.files[0])} />
+            <div className="sm:col-span-2">
+              <FileUpload
+                label="Product image"
+                file={imageFile}
+                onChange={(file) => setImageFile(file)}
+                currentImageUrl={editing.imageUrl}
+              />
+            </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.isSubscribable} onChange={change('isSubscribable')} /> Subscribable product</label>
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <Switch
+              checked={form.isSubscribable}
+              onChange={(checked) => setForm((prev) => ({ ...prev, isSubscribable: checked }))}
+              label="Subscribable product"
+              description="Enable recurring contract billing (monthly, quarterly, or yearly)"
+            />
+          </div>
 
           {editing.id ? (
             <ProductRecommendationsPanel productId={editing.id} />
@@ -299,6 +349,18 @@ const ProductsPage = () => {
         emptyIcon={Package}
         emptyTitle={isLoading ? 'Loading…' : 'No products yet'}
       />
+
+      {confirmProduct && (
+        <ConfirmDialog
+          isOpen={true}
+          title={`Deactivate ${confirmProduct.name}?`}
+          message={`SKU: ${confirmProduct.sku}. Deactivating will remove it from active quote selectors.`}
+          tone="danger"
+          confirmLabel="Deactivate"
+          onConfirm={executeDeactivate}
+          onClose={() => setConfirmProduct(null)}
+        />
+      )}
     </div>
   );
 };
