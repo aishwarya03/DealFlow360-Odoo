@@ -19,6 +19,7 @@ import {
   updateProductSubscriptionPlans,
 } from '../../api/products';
 import { listCategories } from '../../api/categories';
+import { listVendors } from '../../api/vendors';
 
 const PLAN_CYCLES = [
   { key: 'MONTHLY', label: 'Monthly' },
@@ -49,6 +50,7 @@ const ProductsPage = () => {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [editing, setEditing] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({});
@@ -60,6 +62,7 @@ const ProductsPage = () => {
       .catch(() => toast.error('Could not load products'))
       .finally(() => setIsLoading(false));
     listCategories().then(setCategories).catch(() => toast.error('Could not load categories'));
+    listVendors().then(setVendors).catch(() => toast.error('Could not load vendors'));
   }, []);
 
   const openForm = (product = null) => {
@@ -71,6 +74,7 @@ const ProductsPage = () => {
       description: product.description ?? '',
       productType: product.productType,
       categoryId: product.category?.id ?? '',
+      preferredVendorId: product.preferredVendor?.id ?? '',
       unit: product.unit,
       isSubscribable: product.isSubscribable,
       listPrice: product.listPrice,
@@ -78,7 +82,7 @@ const ProductsPage = () => {
       taxRate: product.taxRate,
       plans: emptyPlans(),
     } : {
-      sku: '', name: '', description: '', productType: 'GOODS', categoryId: '',
+      sku: '', name: '', description: '', productType: 'GOODS', categoryId: '', preferredVendorId: '',
       unit: 'unit', isSubscribable: false, listPrice: '', costPrice: '', taxRate: 0,
       plans: emptyPlans(),
     });
@@ -110,6 +114,11 @@ const ProductsPage = () => {
       const payload = {
         ...form,
         categoryId: Number(form.categoryId),
+        preferredVendorId: form.preferredVendorId
+          ? Number(form.preferredVendorId)
+          : editing.id
+            ? null
+            : undefined,
         listPrice: Number(form.listPrice),
         costPrice: Number(form.costPrice),
         taxRate: Number(form.taxRate),
@@ -242,6 +251,7 @@ const ProductsPage = () => {
             <Input label="Description" name="description" value={form.description} onChange={change('description')} />
             <label className="text-sm font-medium text-slate-700">Category<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.categoryId} onChange={change('categoryId')} required><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.path ?? category.name}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Type<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.productType} onChange={change('productType')}><option value="GOODS">Goods</option><option value="SERVICE">Service</option><option value="COMBO">Combo</option></select></label>
+            <label className="text-sm font-medium text-slate-700">Preferred vendor<select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" value={form.preferredVendorId} onChange={change('preferredVendorId')}><option value="">None</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}</select></label>
             <Input label="Unit" name="unit" value={form.unit} onChange={change('unit')} required />
             <Input label="List price" name="listPrice" type="number" min="0" value={form.listPrice} onChange={change('listPrice')} required />
             <Input label="Cost price" name="costPrice" type="number" min="0" value={form.costPrice} onChange={change('costPrice')} required />

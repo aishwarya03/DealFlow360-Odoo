@@ -29,6 +29,9 @@ const toPublicProduct = (product) => {
             : product.category.name,
         }
       : { id: product.categoryId },
+    preferredVendor: product.preferredVendor
+      ? { id: product.preferredVendor.id, name: product.preferredVendor.name }
+      : null,
     unit: product.unit,
     imageUrl: product.imageUrl,
     isSubscribable: product.isSubscribable,
@@ -51,6 +54,7 @@ const withCategory = {
       parent: { select: { name: true } },
     },
   },
+  preferredVendor: { select: { id: true, name: true } },
 };
 
 const toPublicPlans = (plans) =>
@@ -101,6 +105,12 @@ const assertCategoryExists = async (categoryId) => {
   if (categoryId === undefined) return;
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   if (!category) throw ApiError.badRequest(`No category with id ${categoryId}`);
+};
+
+const assertVendorExists = async (preferredVendorId) => {
+  if (preferredVendorId === undefined || preferredVendorId === null) return;
+  const vendor = await prisma.vendor.findUnique({ where: { id: preferredVendorId } });
+  if (!vendor) throw ApiError.badRequest(`No vendor with id ${preferredVendorId}`);
 };
 
 export const listProducts = async (filters = {}) => {
@@ -244,6 +254,7 @@ export const createProduct = async (data) => {
   if (existing) throw ApiError.conflict(`SKU ${data.sku} is already in use`);
 
   await assertCategoryExists(data.categoryId);
+  await assertVendorExists(data.preferredVendorId);
 
   const product = await prisma.product.create({ data, include: withCategory });
 
@@ -261,6 +272,7 @@ export const updateProduct = async (id, data) => {
   }
 
   await assertCategoryExists(data.categoryId);
+  await assertVendorExists(data.preferredVendorId);
 
   // A partial update can break the cost-vs-list rule using one new value against
   // one stored value, so the rule is re-checked on the merged result.

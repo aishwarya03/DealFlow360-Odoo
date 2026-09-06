@@ -62,6 +62,10 @@ export const STATUS = {
   BACKORDER: { label: 'Backorder', tone: 'warning' },
   COMPLETE: { label: 'Complete', tone: 'success' },
 
+  // Purchase order lifecycle (DRAFT and CANCELLED reuse the entries above)
+  ORDERED: { label: 'Ordered', tone: 'info' },
+  DONE: { label: 'Received', tone: 'success' },
+
   // Subscription
   ACTIVE: { label: 'Active', tone: 'success' },
   PAUSED: { label: 'Paused', tone: 'neutral' },

@@ -8,10 +8,12 @@ import CustomersPage from '../pages/app/CustomersPage';
 import Dashboard from '../pages/app/Dashboard';
 import InventoryPage from '../pages/app/InventoryPage';
 import ProductsPage from '../pages/app/ProductsPage';
+import PurchaseOrdersPage from '../pages/app/PurchaseOrdersPage';
 import QuotationDetailPage from '../pages/app/QuotationDetailPage';
 import QuotationsPage from '../pages/app/QuotationsPage';
 import SubscriptionsPage from '../pages/app/SubscriptionsPage';
 import SubscriptionDetailPage from '../pages/app/SubscriptionDetailPage';
+import VendorsPage from '../pages/app/VendorsPage';
 import WarehousesPage from '../pages/app/WarehousesPage';
 import About from '../pages/About';
 import Cart from '../pages/Cart';
@@ -103,6 +105,8 @@ const AppRoutes = () => {
           <Route path="customers" element={<CustomersPage />} />
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="inventory" element={<InventoryPage />} />
+          <Route path="vendors" element={<VendorsPage />} />
+          <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
 
           <Route path="quotations" element={<QuotationsPage />} />
           <Route path="quotations/:id" element={<QuotationDetailPage />} />

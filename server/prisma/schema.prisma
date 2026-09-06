@@ -232,6 +232,13 @@ model Product {
   categoryId Int
   category   Category @relation(fields: [categoryId], references: [id])
 
+  // Who to place a backorder with when this product runs out. Nullable —
+  // a product can exist in the catalog before anyone has configured a
+  // supplier for it; the backorder action just requires one to be picked
+  // at that point (either here or on the purchase order itself).
+  preferredVendorId Int?
+  preferredVendor   Vendor? @relation(fields: [preferredVendorId], references: [id], onDelete: SetNull)
+
   unit String @default("unit")
 
   // Server-relative path (e.g. "/uploads/products/xyz.jpg") or an external
@@ -256,6 +263,7 @@ model Product {
   updatedAt DateTime @updatedAt
 
   inventory      Inventory[]
+  purchaseOrders PurchaseOrder[]
   quotationLines QuotationLine[] @relation("QuotationLineProduct")
 
   // Catalog-configured upsell/cross-sell pairings, evaluated against
@@ -370,9 +378,10 @@ model Warehouse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  inventory   Inventory[]
-  movements   StockMovement[]
-  allocations QuotationLineAllocation[]
+  inventory      Inventory[]
+  movements      StockMovement[]
+  allocations    QuotationLineAllocation[]
+  purchaseOrders PurchaseOrder[]
 
   @@map("warehouses")
 }
@@ -443,6 +452,76 @@ model StockMovement {
 
   @@index([warehouseId, productId])
   @@map("stock_movements")
+}
+
+// ── Vendors & Purchase Orders ────────────────────────────────────────────
+
+// A supplier a backorder can be placed with. Deliberately narrow — just the
+// contact fields the backorder flow actually needs (no job position, no
+// tags: this is not the CRM contact form, just "who do we call and where do
+// we send the PO").
+model Vendor {
+  id      Int     @id @default(autoincrement())
+  name    String
+  address String?
+  email   String?
+  phone   String?
+  website String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("vendors")
+}
+
+// DRAFT: backorder placed, not yet sent. ORDERED: sent to the vendor,
+// waiting on goods. DONE: goods received — the transition that actually
+// increases stock (see purchaseOrder.service.js). CANCELLED is terminal,
+// same "deactivate/cancel, never delete" convention as the rest of this
+// schema.
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  DONE
+  CANCELLED
+}
+
+// The backorder itself: one row = one request to restock one product from
+// one vendor into one warehouse. There is no separate "Backorder" table —
+// this row's own status IS the backorder's stage, so "move the backorder to
+// the next stage" and "advance this purchase order's status" are the same
+// action.
+model PurchaseOrder {
+  id Int @id @default(autoincrement())
+
+  vendorId Int
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // Where the stock lands once the order is marked DONE.
+  warehouseId Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  quantity Int
+  status   PurchaseOrderStatus @default(DRAFT)
+  notes    String?
+
+  orderedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([productId])
+  @@index([status])
+  @@map("purchase_orders")
 }
 
 // ── Quotations ──────────────────────────────────────────────────────────
