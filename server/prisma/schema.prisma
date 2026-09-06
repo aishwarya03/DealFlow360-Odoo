@@ -164,6 +164,14 @@ model Customer {
 
   contactName String?
   phone       String?
+
+  // Address, split out (rather than one free-text block) so pincode/state/
+  // country can be filtered and validated on their own.
+  address String?
+  pincode String?
+  state   String?
+  country String?
+
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
