@@ -18,6 +18,10 @@ const toPublicCustomer = (customer) => ({
   email: customer.email,
   contactName: customer.contactName,
   phone: customer.phone,
+  address: customer.address,
+  pincode: customer.pincode,
+  state: customer.state,
+  country: customer.country,
 });
 
 const issuePortalToken = (customer) =>
@@ -66,7 +70,15 @@ export const registerCustomer = async (data) => {
   const customer = existing
     ? await prisma.customer.update({
         where: { id: existing.id },
-        data: { passwordHash, contactName: data.name, phone: data.phone ?? existing.phone },
+        data: {
+          passwordHash,
+          contactName: data.name,
+          phone: data.phone ?? existing.phone,
+          address: data.address ?? existing.address,
+          pincode: data.pincode ?? existing.pincode,
+          state: data.state ?? existing.state,
+          country: data.country ?? existing.country,
+        },
       })
     : await prisma.customer.create({
         data: {
@@ -75,6 +87,10 @@ export const registerCustomer = async (data) => {
           passwordHash,
           contactName: data.name,
           phone: data.phone,
+          address: data.address,
+          pincode: data.pincode,
+          state: data.state,
+          country: data.country,
           tierId: await lowestTierId(prisma),
         },
       });
@@ -269,6 +285,10 @@ export const registerAndRequestQuotation = async ({ message, lines, ...registrat
             passwordHash,
             contactName: registration.name,
             phone: registration.phone ?? existing.phone,
+            address: registration.address ?? existing.address,
+            pincode: registration.pincode ?? existing.pincode,
+            state: registration.state ?? existing.state,
+            country: registration.country ?? existing.country,
           },
         })
       : await tx.customer.create({
@@ -278,6 +298,10 @@ export const registerAndRequestQuotation = async ({ message, lines, ...registrat
             passwordHash,
             contactName: registration.name,
             phone: registration.phone,
+            address: registration.address,
+            pincode: registration.pincode,
+            state: registration.state,
+            country: registration.country,
             tierId,
           },
         });

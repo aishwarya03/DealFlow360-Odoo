@@ -23,6 +23,10 @@ const EMPTY_FORM = {
   phone: '',
   password: '',
   message: '',
+  address: '',
+  pincode: '',
+  state: '',
+  country: '',
 };
 
 /*
@@ -115,6 +119,10 @@ const RequestQuote = () => {
           password: form.password,
           phone: form.phone || undefined,
           message: form.message || undefined,
+          address: form.address || undefined,
+          pincode: form.pincode || undefined,
+          state: form.state || undefined,
+          country: form.country || undefined,
           lines,
         });
       } else {
@@ -124,6 +132,10 @@ const RequestQuote = () => {
           email: form.email,
           password: form.password,
           phone: form.phone || undefined,
+          address: form.address || undefined,
+          pincode: form.pincode || undefined,
+          state: form.state || undefined,
+          country: form.country || undefined,
         });
       }
       if (!customer) setCustomer(result.customer);
@@ -429,6 +441,36 @@ const RequestQuote = () => {
                     onChange={update('password')}
                     error={fieldErrors.password}
                   />
+                  <Input
+                    label="Address"
+                    autoComplete="street-address"
+                    value={form.address}
+                    onChange={update('address')}
+                    error={fieldErrors.address}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Input
+                      label="Pincode"
+                      autoComplete="postal-code"
+                      value={form.pincode}
+                      onChange={update('pincode')}
+                      error={fieldErrors.pincode}
+                    />
+                    <Input
+                      label="State"
+                      autoComplete="address-level1"
+                      value={form.state}
+                      onChange={update('state')}
+                      error={fieldErrors.state}
+                    />
+                    <Input
+                      label="Country"
+                      autoComplete="country-name"
+                      value={form.country}
+                      onChange={update('country')}
+                      error={fieldErrors.country}
+                    />
+                  </div>
                 </>
               )}
               {items.length > 0 && (
